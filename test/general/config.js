@@ -116,10 +116,10 @@ n9/quqtmyOtYOA6gXNCw0Fal3iANKBmsPmYI
   });
 
   it('openpgp.generateKey', async function() {
-    const v5KeysVal = openpgp.config.v5Keys;
+    const v6KeysVal = openpgp.config.v6Keys;
     const preferredHashAlgorithmVal = openpgp.config.preferredHashAlgorithm;
     const showCommentVal = openpgp.config.showComment;
-    openpgp.config.v5Keys = false;
+    openpgp.config.v6Keys = false;
     openpgp.config.preferredHashAlgorithm = openpgp.enums.hash.sha256;
     openpgp.config.showComment = false;
 
@@ -134,7 +134,7 @@ n9/quqtmyOtYOA6gXNCw0Fal3iANKBmsPmYI
       expect(key.users[0].selfCertifications[0].preferredHashAlgorithms[0]).to.equal(openpgp.config.preferredHashAlgorithm);
 
       const config = {
-        v5Keys: true,
+        v6Keys: true,
         showComment: true,
         preferredHashAlgorithm: openpgp.enums.hash.sha512
       };
@@ -148,7 +148,7 @@ n9/quqtmyOtYOA6gXNCw0Fal3iANKBmsPmYI
       expect(privateKeyArmored2.indexOf(openpgp.config.commentString) > 0).to.be.true;
       expect(key2.users[0].selfCertifications[0].preferredHashAlgorithms[0]).to.equal(config.preferredHashAlgorithm);
     } finally {
-      openpgp.config.v5Keys = v5KeysVal;
+      openpgp.config.v6Keys = v6KeysVal;
       openpgp.config.preferredHashAlgorithm = preferredHashAlgorithmVal;
       openpgp.config.showComment = showCommentVal;
     }

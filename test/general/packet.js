@@ -852,9 +852,9 @@ V+HOQJQxXJkVRYa3QrFUehiMzTeqqMdgC6ZqJy7+
     expect(secretKeyPacket2.publicParams).to.deep.equal(secretKeyPacket.publicParams);
   });
 
-  it('Writing of unencrypted v5 secret key packet', async function() {
-    const originalV5KeysSetting = openpgp.config.v5Keys;
-    openpgp.config.v5Keys = true;
+  it('Writing of unencrypted v6 secret key packet', async function() {
+    const originalv6KeysSetting = openpgp.config.v6Keys;
+    openpgp.config.v6Keys = true;
 
     try {
       const packet = new openpgp.SecretKeyPacket();
@@ -877,7 +877,7 @@ V+HOQJQxXJkVRYa3QrFUehiMzTeqqMdgC6ZqJy7+
       expect(written[19]).to.equal(2);
       expect(written[20]).to.equal(3);
     } finally {
-      openpgp.config.v5Keys = originalV5KeysSetting;
+      openpgp.config.v6Keys = originalv6KeysSetting;
     }
   });
 
