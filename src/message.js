@@ -24,7 +24,7 @@ import crypto from './crypto';
 import enums from './enums';
 import util from './util';
 import { Signature } from './signature';
-import { getPreferredHashAlgo, getPreferredAlgo, isAEADSupported, createSignaturePacket } from './key';
+import { getPreferredHashAlgo, getPreferredCipherSuite, createSignaturePacket } from './key';
 import {
   PacketList,
   LiteralDataPacket,
@@ -343,14 +343,12 @@ export class Message {
    * @async
    */
   static async generateSessionKey(encryptionKeys = [], date = new Date(), userIDs = [], config = defaultConfig) {
-    const algo = await getPreferredAlgo('symmetric', encryptionKeys, date, userIDs, config);
-    const algorithmName = enums.read(enums.symmetric, algo);
-    const aeadAlgorithmName = config.aeadProtect && await isAEADSupported(encryptionKeys, date, userIDs, config) ?
-      enums.read(enums.aead, await getPreferredAlgo('aead', encryptionKeys, date, userIDs, config)) :
-      undefined;
+    const [symAlgo, aeadAlgo] = await getPreferredCipherSuite(encryptionKeys, date, userIDs, config);
+    const symAlgoName = enums.read(enums.symmetric, symAlgo);
+    const aeadAlgoName = aeadAlgo ? enums.read(enums.aead, aeadAlgo) : undefined;
 
-    const sessionKeyData = crypto.generateSessionKey(algo);
-    return { data: sessionKeyData, algorithm: algorithmName, aeadAlgorithm: aeadAlgorithmName };
+    const sessionKeyData = crypto.generateSessionKey(symAlgo);
+    return { data: sessionKeyData, algorithm: symAlgoName, aeadAlgorithm: aeadAlgoName };
   }
 
   /**
