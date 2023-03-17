@@ -21,8 +21,6 @@ import enums from '../enums';
 import util from '../util';
 import { UnsupportedError } from './packet';
 
-const VERSION = 3;
-
 /**
  * Public-Key Encrypted Session Key Packets (Tag 1)
  *
@@ -47,7 +45,14 @@ class PublicKeyEncryptedSessionKeyPacket {
   constructor() {
     this.version = 3;
 
+    // For version 3:
     this.publicKeyID = new KeyID();
+
+    // For version 6:
+    this.publicKeyVersion = null;
+    this.publicKeyFingerprint = null;
+
+    // For all versions:
     this.publicKeyAlgorithm = null;
 
     this.sessionKey = null;
@@ -67,13 +72,29 @@ class PublicKeyEncryptedSessionKeyPacket {
    * @param {Uint8Array} bytes - Payload of a tag 1 packet
    */
   read(bytes) {
-    this.version = bytes[0];
-    if (this.version !== VERSION) {
+    let offset = 0;
+    this.version = bytes[offset++];
+    if (this.version !== 3 && this.version !== 6) {
       throw new UnsupportedError(`Version ${this.version} of the PKESK packet is unsupported.`);
     }
-    this.publicKeyID.read(bytes.subarray(1, bytes.length));
-    this.publicKeyAlgorithm = bytes[9];
-    this.encrypted = crypto.parseEncSessionKeyParams(this.publicKeyAlgorithm, bytes.subarray(10));
+    if (this.version === 6) {
+      this.publicKeyVersion = bytes[offset++];
+      let fingerprintLength = this.publicKeyVersion ? (this.publicKeyVersion >= 5 ? 32 : 20) : 0;
+      this.publicKeyFingerprint = bytes.subarray(offset, offset + fingerprintLength);
+      offset += fingerprintLength;
+      if (this.publicKeyVersion === 0) {
+        this.publicKeyID = KeyID.wildcard();
+      } else if (this.publicKeyVersion >= 5) {
+        this.publicKeyID.read(this.publicKeyFingerprint);
+      } else {
+        this.publicKeyID.read(this.publicKeyFingerprint.subarray(-8));
+      }
+    } else {
+      this.publicKeyID.read(bytes.subarray(offset, offset + 8));
+      offset += 8;
+    }
+    this.publicKeyAlgorithm = bytes[offset++];
+    this.encrypted = crypto.parseEncSessionKeyParams(this.publicKeyAlgorithm, bytes.subarray(offset));
   }
 
   /**
@@ -83,11 +104,20 @@ class PublicKeyEncryptedSessionKeyPacket {
    */
   write() {
     const arr = [
-      new Uint8Array([this.version]),
-      this.publicKeyID.write(),
+      new Uint8Array([this.version])
+    ];
+
+    if (this.version === 6) {
+      arr.push(new Uint8Array([this.publicKeyVersion]));
+      arr.push(this.publicKeyFingerprint);
+    } else {
+      arr.push(this.publicKeyID.write());
+    }
+
+    arr.push(
       new Uint8Array([this.publicKeyAlgorithm]),
       crypto.serializeParams(this.publicKeyAlgorithm, this.encrypted)
-    ];
+    );
 
     return util.concatUint8Array(arr);
   }
@@ -100,7 +130,7 @@ class PublicKeyEncryptedSessionKeyPacket {
    */
   async encrypt(key) {
     const data = util.concatUint8Array([
-      new Uint8Array([enums.write(enums.symmetric, this.sessionKeyAlgorithm)]),
+      new Uint8Array(this.version === 6 ? [] : [enums.write(enums.symmetric, this.sessionKeyAlgorithm)]),
       this.sessionKey,
       util.writeChecksum(this.sessionKey)
     ]);
@@ -124,13 +154,14 @@ class PublicKeyEncryptedSessionKeyPacket {
     }
 
     const randomPayload = randomSessionKey ? util.concatUint8Array([
-      new Uint8Array([randomSessionKey.sessionKeyAlgorithm]),
+      new Uint8Array(this.version === 6 ? [] : [randomSessionKey.sessionKeyAlgorithm]),
       randomSessionKey.sessionKey,
       util.writeChecksum(randomSessionKey.sessionKey)
     ]) : null;
     const decoded = await crypto.publicKeyDecrypt(this.publicKeyAlgorithm, key.publicParams, key.privateParams, this.encrypted, key.getFingerprintBytes(), randomPayload);
-    const symmetricAlgoByte = decoded[0];
-    const sessionKey = decoded.subarray(1, decoded.length - 2);
+    let offset = 0;
+    const symmetricAlgoByte = this.version === 3 ? decoded[offset++] : null;
+    const sessionKey = decoded.subarray(offset, decoded.length - 2);
     const checksum = decoded.subarray(decoded.length - 2);
     const computedChecksum = util.writeChecksum(sessionKey);
     const isValidChecksum = computedChecksum[0] === checksum[0] & computedChecksum[1] === checksum[1];
