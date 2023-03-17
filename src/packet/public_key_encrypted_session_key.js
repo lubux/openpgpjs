@@ -131,8 +131,7 @@ class PublicKeyEncryptedSessionKeyPacket {
   async encrypt(key) {
     const data = util.concatUint8Array([
       new Uint8Array(this.version === 6 ? [] : [enums.write(enums.symmetric, this.sessionKeyAlgorithm)]),
-      this.sessionKey,
-      util.writeChecksum(this.sessionKey)
+      this.sessionKey
     ]);
     const algo = enums.write(enums.publicKey, this.publicKeyAlgorithm);
     this.encrypted = await crypto.publicKeyEncrypt(
@@ -161,27 +160,21 @@ class PublicKeyEncryptedSessionKeyPacket {
     const decoded = await crypto.publicKeyDecrypt(this.publicKeyAlgorithm, key.publicParams, key.privateParams, this.encrypted, key.getFingerprintBytes(), randomPayload);
     let offset = 0;
     const symmetricAlgoByte = this.version === 3 ? decoded[offset++] : null;
-    const sessionKey = decoded.subarray(offset, decoded.length - 2);
-    const checksum = decoded.subarray(decoded.length - 2);
-    const computedChecksum = util.writeChecksum(sessionKey);
-    const isValidChecksum = computedChecksum[0] === checksum[0] & computedChecksum[1] === checksum[1];
+    let sessionKey = decoded.subarray(offset);
 
-    if (randomSessionKey) {
-      // We must not leak info about the validity of the decrypted checksum or cipher algo.
-      // The decrypted session key must be of the same algo and size as the random session key, otherwise we discard it and use the random data.
-      const isValidPayload = isValidChecksum & symmetricAlgoByte === randomSessionKey.sessionKeyAlgorithm & sessionKey.length === randomSessionKey.sessionKey.length;
-      this.sessionKeyAlgorithm = util.selectUint8(isValidPayload, symmetricAlgoByte, randomSessionKey.sessionKeyAlgorithm);
-      this.sessionKey = util.selectUint8Array(isValidPayload, sessionKey, randomSessionKey.sessionKey);
-
-    } else {
-      const isValidPayload = isValidChecksum && enums.read(enums.symmetric, symmetricAlgoByte);
-      if (isValidPayload) {
-        this.sessionKey = sessionKey;
-        this.sessionKeyAlgorithm = symmetricAlgoByte;
+    if (this.version === 3) {
+      if (randomSessionKey) {
+        // We must not leak info about the validity of the cipher algo.
+        // Therefore, we always use the cipher algo we guessed it will be, and hope it is correct.
+        // If it is not correct, decryption will fail. Hopefully it will succeed with the next algorithm we try :)
+        this.sessionKeyAlgorithm = randomSessionKey.sessionKeyAlgorithm;
+        // If the decrypted algorithm identifier was wrong, use the random session key rather than the decrypted one.
+        sessionKey = util.selectUint8Array(symmetricAlgoByte === randomSessionKey.sessionKeyAlgorithm, sessionKey, randomSessionKey.sessionKey);
       } else {
-        throw new Error('Decryption error');
+        this.sessionKeyAlgorithm = symmetricAlgoByte;
       }
     }
+    this.sessionKey = sessionKey;
   }
 }
 

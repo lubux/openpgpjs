@@ -47,6 +47,7 @@ import { UnsupportedError } from '../packet/packet';
  * @async
  */
 export async function publicKeyEncrypt(algo, publicParams, data, fingerprint) {
+  data = util.concatUint8Array([data, util.writeChecksum(data.subarray(data.length % 8))]);
   switch (algo) {
     case enums.publicKey.rsaEncrypt:
     case enums.publicKey.rsaEncryptSign: {
@@ -84,30 +85,48 @@ export async function publicKeyEncrypt(algo, publicParams, data, fingerprint) {
  * @async
  */
 export async function publicKeyDecrypt(algo, publicKeyParams, privateKeyParams, sessionKeyParams, fingerprint, randomPayload) {
+  let decrypted;
   switch (algo) {
     case enums.publicKey.rsaEncryptSign:
     case enums.publicKey.rsaEncrypt: {
       const { c } = sessionKeyParams;
       const { n, e } = publicKeyParams;
       const { d, p, q, u } = privateKeyParams;
-      return publicKey.rsa.decrypt(c, n, e, d, p, q, u, randomPayload);
+      decrypted = await publicKey.rsa.decrypt(c, n, e, d, p, q, u, randomPayload);
+      break;
     }
     case enums.publicKey.elgamal: {
       const { c1, c2 } = sessionKeyParams;
       const p = publicKeyParams.p;
       const x = privateKeyParams.x;
-      return publicKey.elgamal.decrypt(c1, c2, p, x, randomPayload);
+      decrypted = await publicKey.elgamal.decrypt(c1, c2, p, x, randomPayload);
+      break;
     }
     case enums.publicKey.ecdh: {
       const { oid, Q, kdfParams } = publicKeyParams;
       const { d } = privateKeyParams;
       const { V, C } = sessionKeyParams;
-      return publicKey.elliptic.ecdh.decrypt(
+      decrypted = await publicKey.elliptic.ecdh.decrypt(
         oid, kdfParams, V, C.data, Q, d, fingerprint);
+      break;
     }
     default:
       throw new Error('Unknown public key encryption algorithm.');
   }
+  const result = decrypted.subarray(0, decrypted.length - 2);
+  const checksum = decrypted.subarray(decrypted.length - 2);
+  const computedChecksum = util.writeChecksum(result.subarray(result.length % 8));
+  const isValidChecksum = computedChecksum[0] === checksum[0] & computedChecksum[1] === checksum[1];
+  if (randomPayload) {
+    // We must not leak info about the validity of the decrypted checksum.
+    // The decrypted session key must be of the same size as the random session key, otherwise we discard it and use the random data.
+    const isValidPayload = isValidChecksum & decrypted.length === randomPayload.length;
+    return util.selectUint8Array(isValidPayload, result, randomPayload);
+  }
+  if (isValidChecksum) {
+    return result;
+  }
+  throw new Error('Decryption error');
 }
 
 /**
