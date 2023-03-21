@@ -163,9 +163,14 @@ class SecretKeyPacket extends PublicKeyPacket {
     this.isEncrypted = !!this.s2kUsage;
 
     if (!this.isEncrypted) {
-      const cleartext = this.keyMaterial.subarray(0, -2);
-      if (!util.equalsUint8Array(util.writeChecksum(cleartext), this.keyMaterial.subarray(-2))) {
-        throw new Error('Key checksum mismatch');
+      let cleartext;
+      if (this.version === 6) {
+        cleartext = this.keyMaterial;
+      } else {
+        cleartext = this.keyMaterial.subarray(0, -2);
+        if (!util.equalsUint8Array(util.writeChecksum(cleartext), this.keyMaterial.subarray(-2))) {
+          throw new Error('Key checksum mismatch');
+        }
       }
       try {
         const { privateParams } = crypto.parsePrivateKeyParams(this.algorithm, cleartext, this.publicParams);
@@ -235,7 +240,7 @@ class SecretKeyPacket extends PublicKeyPacket {
       }
       arr.push(this.keyMaterial);
 
-      if (!this.s2kUsage) {
+      if (!this.s2kUsage && this.version !== 6) {
         arr.push(util.writeChecksum(this.keyMaterial));
       }
     }

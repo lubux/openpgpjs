@@ -1310,7 +1310,7 @@ V+HOQJQxXJkVRYa3QrFUehiMzTeqqMdgC6ZqJy7+
       packet.s2kUsage = 0;
 
       const written = packet.write();
-      expect(written.length).to.equal(23);
+      expect(written.length).to.equal(21);
 
       /**
        * The private data
