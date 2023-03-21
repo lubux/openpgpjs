@@ -163,10 +163,9 @@ class PublicKeyPacket {
   writeForHash(version) {
     const bytes = this.writePublicKey();
 
-    if (version >= 5) {
-      return util.concatUint8Array([new Uint8Array([0x9A]), util.writeNumber(bytes.length, 4), bytes]);
-    }
-    return util.concatUint8Array([new Uint8Array([0x99]), util.writeNumber(bytes.length, 2), bytes]);
+    const versionOctet = 0x95 + version;
+    const lengthOctets = version >= 5 ? 4 : 2;
+    return util.concatUint8Array([new Uint8Array([versionOctet]), util.writeNumber(bytes.length, lengthOctets), bytes]);
   }
 
   /**
