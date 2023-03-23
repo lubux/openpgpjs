@@ -64,6 +64,12 @@ export async function publicKeyEncrypt(algo, publicParams, data, fingerprint) {
         oid, kdfParams, data, Q, fingerprint);
       return { V, C: new ECDHSymkey(C) };
     }
+    case enums.publicKey.x25519: {
+      const { A } = publicParams;
+      const { ephemeralPublicKey, wrappedKey } = await publicKey.elliptic.ecdhMontgomery.encrypt(
+        algo, data, A);
+      return { ephemeralPublicKey, C: new ECDHSymkey(wrappedKey) };
+    }
     default:
       return [];
   }
@@ -104,6 +110,12 @@ export async function publicKeyDecrypt(algo, publicKeyParams, privateKeyParams, 
       const { V, C } = sessionKeyParams;
       return publicKey.elliptic.ecdh.decrypt(
         oid, kdfParams, V, C.data, Q, d, fingerprint);
+    }
+    case enums.publicKey.x25519: {
+      const { k } = privateKeyParams;
+      const { ephemeralPublicKey, C } = sessionKeyParams;
+      return publicKey.elliptic.ecdhMontgomery.decrypt(
+        algo, ephemeralPublicKey, C.data, k);
     }
     default:
       throw new Error('Unknown public key encryption algorithm.');
@@ -160,7 +172,8 @@ export function parsePublicKeyParams(algo, bytes) {
       const kdfParams = new KDFParams(); read += kdfParams.read(bytes.subarray(read));
       return { read: read, publicParams: { oid, Q, kdfParams } };
     }
-    case enums.publicKey.ed25519: {
+    case enums.publicKey.ed25519:
+    case enums.publicKey.x25519: {
       const A = bytes.subarray(read, read + 32); read += A.length;
       return { read, publicParams: { A } };
     }
@@ -211,6 +224,10 @@ export function parsePrivateKeyParams(algo, bytes, publicParams) {
       const seed = bytes.subarray(read, read + 32); read += seed.length;
       return { read, privateParams: { seed } };
     }
+    case enums.publicKey.x25519: {
+      const k = bytes.subarray(read, read + 32); read += k.length;
+      return { read, privateParams: { k } };
+    }
     default:
       throw new UnsupportedError('Unknown public key encryption algorithm.');
   }
@@ -248,6 +265,11 @@ export function parseEncSessionKeyParams(algo, bytes) {
       const C = new ECDHSymkey(); C.read(bytes.subarray(read));
       return { V, C };
     }
+    case enums.publicKey.x25519: {
+      const ephemeralPublicKey = bytes.subarray(read, read + 32); read += ephemeralPublicKey.length;
+      const C = new ECDHSymkey(); C.read(bytes.subarray(read));
+      return { ephemeralPublicKey, C };
+    }
     default:
       throw new UnsupportedError('Unknown public key encryption algorithm.');
   }
@@ -261,7 +283,7 @@ export function parseEncSessionKeyParams(algo, bytes) {
  */
 export function serializeParams(algo, params) {
   // Some algorithms do not rely on MPIs to store the binary params
-  const algosWithNativeRepresentation = new Set([enums.publicKey.ed25519]);
+  const algosWithNativeRepresentation = new Set([enums.publicKey.ed25519, enums.publicKey.x25519]);
   const orderedParams = Object.keys(params).map(name => {
     const param = params[name];
     if (!util.isUint8Array(param)) return param.write();
@@ -311,6 +333,11 @@ export function generateParams(algo, bits, oid) {
     case enums.publicKey.ed25519:
       return publicKey.elliptic.eddsa.generate(algo).then(({ A, seed }) => ({
         privateParams: { seed },
+        publicParams: { A }
+      }));
+    case enums.publicKey.x25519:
+      return publicKey.elliptic.ecdhMontgomery.generate(algo).then(({ A, k }) => ({
+        privateParams: { k },
         publicParams: { A }
       }));
     case enums.publicKey.dsa:
@@ -368,6 +395,11 @@ export async function validateParams(algo, publicParams, privateParams) {
       const { A } = publicParams;
       const { seed } = privateParams;
       return publicKey.elliptic.eddsa.validateParams(algo, A, seed);
+    }
+    case enums.publicKey.x25519: {
+      const { A } = publicParams;
+      const { k } = privateParams;
+      return publicKey.elliptic.ecdhMontgomery.validateParams(algo, A, k);
     }
     default:
       throw new Error('Unknown public key algorithm.');
