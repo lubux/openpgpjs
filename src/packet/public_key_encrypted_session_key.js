@@ -67,13 +67,17 @@ class PublicKeyEncryptedSessionKeyPacket {
    * @param {Uint8Array} bytes - Payload of a tag 1 packet
    */
   read(bytes) {
-    this.version = bytes[0];
+    let i = 0;
+    this.version = bytes[i++];
     if (this.version !== VERSION) {
       throw new UnsupportedError(`Version ${this.version} of the PKESK packet is unsupported.`);
     }
-    this.publicKeyID.read(bytes.subarray(1, bytes.length));
-    this.publicKeyAlgorithm = bytes[9];
-    this.encrypted = crypto.parseEncSessionKeyParams(this.publicKeyAlgorithm, bytes.subarray(10));
+    i += this.publicKeyID.read(bytes.subarray(i));
+    this.publicKeyAlgorithm = bytes[i++];
+    if (this.version === 3 && this.publicKeyAlgorithm === enums.publicKey.x25519) {
+      this.sessionKeyAlgorithm = bytes[i++];
+    }
+    this.encrypted = crypto.parseEncSessionKeyParams(this.publicKeyAlgorithm, bytes.subarray(i));
   }
 
   /**
@@ -86,6 +90,9 @@ class PublicKeyEncryptedSessionKeyPacket {
       new Uint8Array([this.version]),
       this.publicKeyID.write(),
       new Uint8Array([this.publicKeyAlgorithm]),
+      (this.version === 3 && this.publicKeyAlgorithm === enums.publicKey.x25519) ?
+        new Uint8Array([this.sessionKeyAlgorithm]) :
+        new Uint8Array(),
       crypto.serializeParams(this.publicKeyAlgorithm, this.encrypted)
     ];
 
@@ -126,7 +133,10 @@ class PublicKeyEncryptedSessionKeyPacket {
 
     const { sessionKey, sessionKeyAlgorithm } = decodeSessionKey(this.version, this.publicKeyAlgorithm, decryptedData, randomSessionKey);
 
-    this.sessionKeyAlgorithm = sessionKeyAlgorithm;
+    // v3 Montgomery curves have cleartext cipher algo
+    if (this.version === 3 && this.publicKeyAlgorithm !== enums.publicKey.x25519) {
+      this.sessionKeyAlgorithm = sessionKeyAlgorithm;
+    }
     this.sessionKey = sessionKey;
   }
 }
@@ -149,11 +159,7 @@ function encodeSessionKey(version, algo, cipherAlgo, sessionKeyData) {
 
     }
     case enums.publicKey.x25519: {
-      return util.concatUint8Array([
-        new Uint8Array([cipherAlgo]),
-        new Uint8Array(7),
-        sessionKeyData
-      ]);
+      return sessionKeyData;
     }
     default:
       throw new Error('Unsupported public key algorithm');
@@ -196,8 +202,7 @@ function decodeSessionKey(version, algo, decryptedData, randomSessionKey) {
     }
     case enums.publicKey.x25519: {
       return {
-        sessionKeyAlgorithm: decryptedData[0],
-        sessionKey: decryptedData.subarray(8)
+        sessionKey: decryptedData
       };
     }
     default:
