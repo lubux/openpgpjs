@@ -101,6 +101,9 @@ class PublicKeyEncryptedSessionKeyPacket {
       offset += 8;
     }
     this.publicKeyAlgorithm = bytes[offset++];
+    if (this.version === 3 && this.publicKeyAlgorithm === enums.publicKey.x25519) {
+      this.sessionKeyAlgorithm = bytes[offset++];
+    }
     this.encrypted = crypto.parseEncSessionKeyParams(this.publicKeyAlgorithm, bytes.subarray(offset));
   }
 
@@ -130,6 +133,9 @@ class PublicKeyEncryptedSessionKeyPacket {
 
     arr.push(
       new Uint8Array([this.publicKeyAlgorithm]),
+      (this.version === 3 && this.publicKeyAlgorithm === enums.publicKey.x25519) ?
+        new Uint8Array([this.sessionKeyAlgorithm]) :
+        new Uint8Array(),
       crypto.serializeParams(this.publicKeyAlgorithm, this.encrypted)
     );
 
@@ -170,7 +176,10 @@ class PublicKeyEncryptedSessionKeyPacket {
 
     const { sessionKey, sessionKeyAlgorithm } = decodeSessionKey(this.version, this.publicKeyAlgorithm, decryptedData, randomSessionKey);
 
-    this.sessionKeyAlgorithm = sessionKeyAlgorithm;
+    // v3 Montgomery curves have cleartext cipher algo
+    if (this.version === 3 && this.publicKeyAlgorithm !== enums.publicKey.x25519) {
+      this.sessionKeyAlgorithm = sessionKeyAlgorithm;
+    }
     this.sessionKey = sessionKey;
   }
 }
@@ -193,13 +202,7 @@ function encodeSessionKey(version, algo, cipherAlgo, sessionKeyData) {
 
     }
     case enums.publicKey.x25519: {
-      return version === 6 ?
-        sessionKeyData :
-        util.concatUint8Array([
-          new Uint8Array([cipherAlgo]),
-          new Uint8Array(7),
-          sessionKeyData
-        ]);
+      return sessionKeyData;
     }
     default:
       throw new Error('Unsupported public key algorithm');
@@ -245,12 +248,9 @@ function decodeSessionKey(version, algo, decryptedData, randomSessionKey) {
       }
     }
     case enums.publicKey.x25519: {
-      return version === 6 ?
-        { sessionKey: decryptedData } :
-        {
-          sessionKeyAlgorithm: decryptedData[0],
-          sessionKey: decryptedData.subarray(8)
-        };
+      return {
+        sessionKey: decryptedData
+      };
     }
     default:
       throw new Error('Unsupported public key algorithm');
