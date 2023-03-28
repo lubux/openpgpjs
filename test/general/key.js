@@ -3005,6 +3005,30 @@ aU71tdtNBQ==
     expect(encryptionKey.getAlgorithmInfo()).to.deep.equal({ algorithm: 'x25519' });
   });
 
+  it('Parsing V4 key using curve448 format', async function() {
+    const privateKey = await openpgp.readKey({ armoredKey: `-----BEGIN PGP PRIVATE KEY BLOCK-----
+
+xXsEZCV2BxxVSY8cCbKvGsyNQN/MMyHvqU+Nr3tsUf22ZEmeVLN9G7oYCRWq
+BoYbIF2qzugatP5hf9O82RJ/RIAAIkGJnEj+uV6tqmaUbnJidjtHirS8Z+g9
+fP+8T9ohRJxscr/H7V4dBmD7lHEMYd6QtdcRJbJbz5yNHSvNBHRlc3TCugQQ
+HAgAPgWCZCV2BwQLCQcICZBi86WXLwuerQMVCAoEFgACAQIZAQKbAwIeARYh
+BOlkk6ZLCBfXRpJl2mLzpZcvC56tAAAmcnPk1D+Pv/0UHIsTFlG77H5WLYF7
+6iyoIB1HQ6/Te4go0C4edNp3vq9ZCHgaLasp6y6VjPP9x5TgAJIRphNJcIQ2
+TD1tKcMV0ubuC6A5anl5Pc+3J/e4+g1A41gFZfk4buQIswVeDARkIIpx0HUP
+JNAAAA==
+=UgWv
+-----END PGP PRIVATE KEY BLOCK-----` });
+    // sanity checks
+    await expect(privateKey.validate()).to.be.fulfilled;
+    const signingKey = await privateKey.getSigningKey();
+    expect(signingKey.keyPacket.algorithm).to.equal(openpgp.enums.publicKey.ed448);
+    expect(signingKey.getAlgorithmInfo()).to.deep.equal({ algorithm: 'ed448' });
+
+    // const encryptionKey = await privateKey.getEncryptionKey();
+    // expect(encryptionKey.keyPacket.algorithm).to.equal(openpgp.enums.publicKey.x25519);
+    // expect(encryptionKey.getAlgorithmInfo()).to.deep.equal({ algorithm: 'x25519' });
+  });
+
   it('Testing key ID and fingerprint for V4 keys', async function() {
     const pubKeysV4 = await openpgp.readKeys({ armoredKeys: twoKeys });
     expect(pubKeysV4).to.exist;

@@ -4109,6 +4109,36 @@ J/qaHc+qmcEpIMmPNvLQ7n4F4kEXk8Zwz+OXovVWLQ+Njl5gzooF
         expect(signatures).to.have.length(1);
         expect(await signatures[0].verified).to.be.true;
       });
+
+      it('sign/verify with Ed448', async function () {
+        // v4 key, which we do not support generating
+        const privateKey = await openpgp.readKey({ armoredKey: `-----BEGIN PGP PRIVATE KEY BLOCK-----
+
+xXsEZCV2BxxVSY8cCbKvGsyNQN/MMyHvqU+Nr3tsUf22ZEmeVLN9G7oYCRWq
+BoYbIF2qzugatP5hf9O82RJ/RIAAIkGJnEj+uV6tqmaUbnJidjtHirS8Z+g9
+fP+8T9ohRJxscr/H7V4dBmD7lHEMYd6QtdcRJbJbz5yNHSvNBHRlc3TCugQQ
+HAgAPgWCZCV2BwQLCQcICZBi86WXLwuerQMVCAoEFgACAQIZAQKbAwIeARYh
+BOlkk6ZLCBfXRpJl2mLzpZcvC56tAAAmcnPk1D+Pv/0UHIsTFlG77H5WLYF7
+6iyoIB1HQ6/Te4go0C4edNp3vq9ZCHgaLasp6y6VjPP9x5TgAJIRphNJcIQ2
+TD1tKcMV0ubuC6A5anl5Pc+3J/e4+g1A41gFZfk4buQIswVeDARkIIpx0HUP
+JNAAAA==
+=UgWv
+-----END PGP PRIVATE KEY BLOCK-----` });
+        const plaintext = 'plaintext';
+
+        const signed = await openpgp.sign({
+          message: await openpgp.createMessage({ text: plaintext }),
+          signingKeys: privateKey
+        });
+
+        const { signatures, data } = await openpgp.verify({
+          message: await openpgp.readMessage({ armoredMessage: signed }),
+          verificationKeys: privateKey
+        });
+        expect(data).to.equal(plaintext);
+        expect(signatures).to.have.length(1);
+        expect(await signatures[0].verified).to.be.true;
+      });
     });
 
     describe('Errors', function() {

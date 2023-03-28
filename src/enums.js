@@ -125,7 +125,7 @@ export default {
     /** EdDSA 25519 (sign only) */
     ed25519: 27,
     /** EdDSA 448 (sign only) */
-    eddsa448: 28
+    ed448: 28
   },
 
   /** {@link https://tools.ietf.org/html/rfc4880#section-9.2|RFC4880, section 9.2}
