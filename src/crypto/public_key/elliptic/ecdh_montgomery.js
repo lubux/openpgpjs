@@ -42,17 +42,23 @@ const HKDF_INFO = {
  * @returns {Promise<{ A: Uint8Array, k: Uint8Array }>}
  */
 export async function generate(algo) {
+  const k = getRandomBytes(getPayloadSize(algo));
+
   switch (algo) {
     case enums.publicKey.x25519: {
       // k stays in little-endian, unlike legacy ECDH over curve25519
-      const k = getRandomBytes(32);
       k[0] &= 248;
       k[31] = (k[31] & 127) | 64;
       const { publicKey: A } = X25519.box.keyPair.fromSecretKey(k);
       return { A, k };
     }
     case enums.publicKey.x448: {
-      const k = X448.utils.randomPrivateKey();
+      // const k = X448.utils.randomPrivateKey(); TODO: waiting for Node bundling fix
+
+      // set the two least significant bits of the first byte to 0, and the most
+      // significant bit of the last byte to 1.
+      k[0] &= 252;
+      k[55] |= 128;
       const A = X448.getPublicKey(k);
       return { A, k };
     }
@@ -105,11 +111,11 @@ export async function validateParams(algo, A, k) {
  * @async
  */
 export async function encrypt(algo, data, recipientA) {
+  const { k: ephemeralSecretKey, A: ephemeralPublicKey } = await generate(algo);
+
   switch (algo) {
     case enums.publicKey.x25519: {
-      const ephemeralSecretKey = getRandomBytes(32);
       const sharedSecret = X25519.scalarMult(ephemeralSecretKey, recipientA);
-      const { publicKey: ephemeralPublicKey } = X25519.box.keyPair.fromSecretKey(ephemeralSecretKey);
       const hkdfInput = util.concatUint8Array([
         ephemeralPublicKey,
         recipientA,
@@ -121,9 +127,8 @@ export async function encrypt(algo, data, recipientA) {
       return { ephemeralPublicKey, wrappedKey };
     }
     case enums.publicKey.x448: {
-      const ephemeralSecretKey = X448.utils.randomPrivateKey();
+      // const ephemeralSecretKey = X448.utils.randomPrivateKey();
       const sharedSecret = X448.getSharedSecret(ephemeralSecretKey, recipientA);
-      const ephemeralPublicKey = X448.getPublicKey(ephemeralSecretKey);
       const hkdfInput = util.concatUint8Array([
         ephemeralPublicKey,
         recipientA,
