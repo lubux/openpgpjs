@@ -26,12 +26,10 @@ export default class BigInteger {
 
     if (n instanceof Uint8Array) {
       const bytes = n;
-      const hex = new Array(bytes.length);
-      for (let i = 0; i < bytes.length; i++) {
-        const hexByte = bytes[i].toString(16);
-        hex[i] = (bytes[i] <= 0xF) ? ('0' + hexByte) : hexByte;
-      }
-      this.value = BigInt('0x0' + hex.join(''));
+      const hexAlphabet = '0123456789ABCDEF';
+      let s = '';
+      bytes.forEach(v => { s += hexAlphabet[v >> 4] + hexAlphabet[v & 15]; });
+      this.value = BigInt('0x0' + s);
     } else {
       this.value = BigInt(n);
     }
