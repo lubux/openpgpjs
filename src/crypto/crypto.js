@@ -63,7 +63,8 @@ export async function publicKeyEncrypt(algo, publicParams, data, fingerprint) {
         oid, kdfParams, data, Q, fingerprint);
       return { V, C: new ECDHSymkey(C) };
     }
-    case enums.publicKey.x25519: {
+    case enums.publicKey.x25519:
+    case enums.publicKey.x448: {
       const { A } = publicParams;
       const { ephemeralPublicKey, wrappedKey } = await publicKey.elliptic.ecdhMontgomery.encrypt(
         algo, data, A);
@@ -110,7 +111,8 @@ export async function publicKeyDecrypt(algo, publicKeyParams, privateKeyParams, 
       return publicKey.elliptic.ecdh.decrypt(
         oid, kdfParams, V, C.data, Q, d, fingerprint);
     }
-    case enums.publicKey.x25519: {
+    case enums.publicKey.x25519:
+    case enums.publicKey.x448: {
       const { A } = publicKeyParams;
       const { k } = privateKeyParams;
       const { ephemeralPublicKey, C } = sessionKeyParams;
@@ -174,7 +176,8 @@ export function parsePublicKeyParams(algo, bytes) {
     }
     case enums.publicKey.ed25519:
     case enums.publicKey.ed448:
-    case enums.publicKey.x25519: {
+    case enums.publicKey.x25519:
+    case enums.publicKey.x448: {
       const A = bytes.subarray(read, read + getCurvePayloadSize(algo)); read += A.length;
       return { read, publicParams: { A } };
     }
@@ -227,8 +230,10 @@ export function parsePrivateKeyParams(algo, bytes, publicParams) {
       const seed = bytes.subarray(read, read + payloadSize); read += seed.length;
       return { read, privateParams: { seed } };
     }
-    case enums.publicKey.x25519: {
-      const k = bytes.subarray(read, read + 32); read += k.length;
+    case enums.publicKey.x25519:
+    case enums.publicKey.x448: {
+      const payloadSize = getCurvePayloadSize(algo);
+      const k = bytes.subarray(read, read + payloadSize); read += k.length;
       return { read, privateParams: { k } };
     }
     default:
@@ -268,8 +273,10 @@ export function parseEncSessionKeyParams(algo, bytes) {
       const C = new ECDHSymkey(); C.read(bytes.subarray(read));
       return { V, C };
     }
-    case enums.publicKey.x25519: {
-      const ephemeralPublicKey = bytes.subarray(read, read + 32); read += ephemeralPublicKey.length;
+    case enums.publicKey.x25519:
+    case enums.publicKey.x448: {
+      const pointSize = getCurvePayloadSize(algo);
+      const ephemeralPublicKey = bytes.subarray(read, read + pointSize); read += ephemeralPublicKey.length;
       const C = new ECDHSymkey(); C.read(bytes.subarray(read));
       return { ephemeralPublicKey, C };
     }
@@ -286,7 +293,7 @@ export function parseEncSessionKeyParams(algo, bytes) {
  */
 export function serializeParams(algo, params) {
   // Some algorithms do not rely on MPIs to store the binary params
-  const algosWithNativeRepresentation = new Set([enums.publicKey.ed25519, enums.publicKey.x25519, enums.publicKey.ed448]);
+  const algosWithNativeRepresentation = new Set([enums.publicKey.ed25519, enums.publicKey.x25519, enums.publicKey.ed448, enums.publicKey.x448]);
   const orderedParams = Object.keys(params).map(name => {
     const param = params[name];
     if (!util.isUint8Array(param)) return param.write();
@@ -340,6 +347,7 @@ export function generateParams(algo, bits, oid) {
         publicParams: { A }
       }));
     case enums.publicKey.x25519:
+    case enums.publicKey.x448:
       return publicKey.elliptic.ecdhMontgomery.generate(algo).then(({ A, k }) => ({
         privateParams: { k },
         publicParams: { A }
@@ -401,7 +409,8 @@ export async function validateParams(algo, publicParams, privateParams) {
       const { seed } = privateParams;
       return publicKey.elliptic.eddsa.validateParams(algo, A, seed);
     }
-    case enums.publicKey.x25519: {
+    case enums.publicKey.x25519:
+    case enums.publicKey.x448: {
       const { A } = publicParams;
       const { k } = privateParams;
       return publicKey.elliptic.ecdhMontgomery.validateParams(algo, A, k);

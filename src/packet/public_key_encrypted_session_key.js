@@ -97,13 +97,14 @@ class PublicKeyEncryptedSessionKeyPacket {
         this.publicKeyID = KeyID.wildcard();
       }
     } else {
-      this.publicKeyID.read(bytes.subarray(offset, offset + 8));
-      offset += 8;
+      offset += this.publicKeyID.read(bytes.subarray(offset));
     }
     this.publicKeyAlgorithm = bytes[offset++];
-    if (this.version === 3 && this.publicKeyAlgorithm === enums.publicKey.x25519) {
+    if (this.version === 3 && (
+      this.publicKeyAlgorithm === enums.publicKey.x25519 || this.publicKeyAlgorithm === enums.publicKey.x448)) {
       this.sessionKeyAlgorithm = bytes[offset++];
     }
+
     this.encrypted = crypto.parseEncSessionKeyParams(this.publicKeyAlgorithm, bytes.subarray(offset));
   }
 
@@ -133,7 +134,8 @@ class PublicKeyEncryptedSessionKeyPacket {
 
     arr.push(
       new Uint8Array([this.publicKeyAlgorithm]),
-      (this.version === 3 && this.publicKeyAlgorithm === enums.publicKey.x25519) ?
+      (this.version === 3 && (
+        this.publicKeyAlgorithm === enums.publicKey.x25519 || this.publicKeyAlgorithm === enums.publicKey.x448)) ?
         new Uint8Array([this.sessionKeyAlgorithm]) :
         new Uint8Array(),
       crypto.serializeParams(this.publicKeyAlgorithm, this.encrypted)
@@ -177,7 +179,9 @@ class PublicKeyEncryptedSessionKeyPacket {
     const { sessionKey, sessionKeyAlgorithm } = decodeSessionKey(this.version, this.publicKeyAlgorithm, decryptedData, randomSessionKey);
 
     // v3 Montgomery curves have cleartext cipher algo
-    if (this.version === 3 && this.publicKeyAlgorithm !== enums.publicKey.x25519) {
+    if (this.version === 3 && (
+      this.publicKeyAlgorithm !== enums.publicKey.x25519 && this.publicKeyAlgorithm !== enums.publicKey.x448)
+    ) {
       this.sessionKeyAlgorithm = sessionKeyAlgorithm;
     }
     this.sessionKey = sessionKey;
@@ -201,7 +205,8 @@ function encodeSessionKey(version, algo, cipherAlgo, sessionKeyData) {
       ]);
 
     }
-    case enums.publicKey.x25519: {
+    case enums.publicKey.x25519:
+    case enums.publicKey.x448: {
       return sessionKeyData;
     }
     default:
@@ -247,7 +252,8 @@ function decodeSessionKey(version, algo, decryptedData, randomSessionKey) {
         }
       }
     }
-    case enums.publicKey.x25519: {
+    case enums.publicKey.x25519:
+    case enums.publicKey.x448: {
       return {
         sessionKey: decryptedData
       };

@@ -2012,7 +2012,7 @@ aOU=
       expect(await stream.readToEnd(streamedData)).to.equal(text);
     });
 
-    it('supports encrypting/decrypting in new x25519 format', async function () {
+    it('supports encrypting/decrypting with new x25519 format', async function () {
       // v4 key
       const privateKey = await openpgp.readKey({ armoredKey: `-----BEGIN PGP PRIVATE KEY BLOCK-----
 
@@ -2027,6 +2027,40 @@ gvsTApsMFiEElhMzIoyVB78iG1SiIf45+TuC+xMAAGgQuN9G73446ykvJ/mL
 sCZ7zGFId2gBd1EnG0FTC4npfOKpck0X8dngByrCxU8LDSfvjsEp/xDAiKsQ
 aU71tdtNBQ==
 =e7jT
+-----END PGP PRIVATE KEY BLOCK-----` });
+      const plaintext = 'plaintext';
+
+      const signed = await openpgp.encrypt({
+        message: await openpgp.createMessage({ text: plaintext }),
+        encryptionKeys: privateKey
+      });
+
+      const { data } = await openpgp.decrypt({
+        message: await openpgp.readMessage({ armoredMessage: signed }),
+        decryptionKeys: privateKey
+      });
+      expect(data).to.equal(plaintext);
+    });
+
+    it('supports encrypting/decrypting with x448', async function () {
+      // v4 key
+      const privateKey = await openpgp.readKey({ armoredKey: `-----BEGIN PGP PRIVATE KEY BLOCK-----
+
+xXsEZCWHXBwwtqciq6ZFU13s+dyhkWR5tOEmF1oX8OiP1B5ypfqyGVM8DkQh
+5eTIMwB1oqJCROANoyA0q2dSigAAbDA5xr74DeClPPXC4ZXJ9uzuJWKvQvE8
+x3EflhgoQCGBM7JfvH5zwdrJvPt8RKDvm0QkZzhPvnFoHnzNBHRlc3TCugQQ
+HAgAPgWCZCWHXAQLCQcICZDsN6h/ys3ppwMVCAoEFgACAQIZAQKbAwIeARYh
+BOJyE9P2eIcU2N2Ne+w3qH/KzemnAAAh1hTFCcEU77bU3YelrJTCNIOQnvt7
+Hs6yZz2053CQTOC+wHkUQLaYYBEXSNyLZxoyv+NuGTiwbuYtAOlbE2erM7Cx
+8B2Qz7M29UkFLMBUfb+yi+gTYYUWCXVQ7Um7MGjjgUG8+9p452i6f28mhRD8
+tTgNAMd6BGQlh1wavTIFgILtbzrqQCiwDGx0YcFNzu9+FZ8vK5Mmm7UEZj0a
+y7FWQtZw8tTaU6mY+RrSa52RjzkGLtQAQO++tgYqc+BnCFdCZ3ZYPRvD3mof
+ffoo3l4xmto+iyvJZbQ4wQPXttg7VjCpEfOsL9TW9Xs09aIkG+7CpgQYHAgA
+KgWCZCWHXAmQ7Deof8rN6acCmwwWIQTichPT9niHFNjdjXvsN6h/ys3ppwAA
+tOv3mYYfzo9oEXWm9iXhRlgAhiEQysT17FkQl0eGK0sXLwiiuqzr7MsULICL
+CScj2JET35mynLHlAwBJEgSwH3oswxoe3mtBjnSDIcBPwluH/x/FC28It+st
+d8d6DDVWmLCPXWefPBqYvF2MtozraiD0NQA=
+=jpWY
 -----END PGP PRIVATE KEY BLOCK-----` });
       const plaintext = 'plaintext';
 
