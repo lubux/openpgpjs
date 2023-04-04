@@ -255,14 +255,14 @@ class SymEncryptedIntegrityProtectedDataPacket {
           }
           if (!chunkIndex || chunk.length) {
             reader.unshift(finalChunk);
-            cryptedPromise = modeInstance[fn](chunk, nonce, adataArray);
+            cryptedPromise = modeInstance[fn](chunk, nonce, adataArray).catch(err => writer.abort(err));
             queuedBytes += chunk.length - tagLengthIfDecrypting + tagLengthIfEncrypting;
           } else {
             // After the last chunk, we either encrypt a final, empty
             // data chunk to get the final authentication tag or
             // validate that final authentication tag.
             adataView.setInt32(5 + chunkIndexSizeIfAEADEP + 4, cryptedBytes); // Should be setInt64(5 + chunkIndexSizeIfAEADEP, ...)
-            cryptedPromise = modeInstance[fn](finalChunk, nonce, adataTagArray);
+            cryptedPromise = modeInstance[fn](finalChunk, nonce, adataTagArray).catch(err => writer.abort(err));
             queuedBytes += tagLengthIfEncrypting;
             done = true;
           }
