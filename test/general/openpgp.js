@@ -2165,7 +2165,7 @@ XfA3pqV4mTzF
       if: true,
       beforeEach: function() {
         openpgp.config.aeadProtect = true;
-        openpgp.config.preferredAEADAlgorithm = openpgp.enums.aead.experimentalGCM;
+        openpgp.config.preferredAEADAlgorithm = openpgp.enums.aead.gcm;
         openpgp.config.v6Keys = true;
 
         // Monkey-patch SEIPD V2 feature flag
@@ -2180,6 +2180,7 @@ XfA3pqV4mTzF
       beforeEach: function() {
         openpgp.config.aeadProtect = true;
         openpgp.config.aeadChunkSizeByte = 0;
+        openpgp.config.preferredAEADAlgorithm = openpgp.enums.aead.eax;
 
         // Monkey-patch SEIPD V2 feature flag
         publicKey.users[0].selfCertifications[0].features = [9];
@@ -2189,7 +2190,6 @@ XfA3pqV4mTzF
     });
 
     tryTests('OCB mode', tests, {
-      if: !openpgp.config.ci,
       beforeEach: function() {
         openpgp.config.aeadProtect = true;
         openpgp.config.preferredAEADAlgorithm = openpgp.enums.aead.ocb;
@@ -2920,60 +2920,94 @@ XfA3pqV4mTzF
         });
 
         it('should fail to decrypt modified message', async function() {
-          const allowUnauthenticatedStream = openpgp.config.allowUnauthenticatedStream;
-          const { privateKey: key } = await openpgp.generateKey({ userIDs: [{ email: 'test@email.com' }], format: 'object' });
-          const [, aeadAlgo] = await getPreferredCipherSuite([key], undefined, undefined, openpgp.config);
-          expect(!!aeadAlgo).to.equal(openpgp.config.aeadProtect);
-
-          const data = await openpgp.encrypt({ message: await openpgp.createMessage({ binary: new Uint8Array(500) }), encryptionKeys: [key.toPublic()] });
-          const encrypted = data.substr(0, 500) + (data[500] === 'a' ? 'b' : 'a') + data.substr(501);
           loadStreamsPolyfill();
-          try {
-            for (const allowStreaming of [true, false]) {
-              openpgp.config.allowUnauthenticatedStream = allowStreaming;
-              for (const [i, encryptedData] of [
-                encrypted,
-                new ReadableStream({
-                  start(controller) {
-                    controller.enqueue(encrypted);
-                    controller.close();
-                  }
-                }),
-                new ReadableStream({
-                  start() {
-                    this.remaining = encrypted.split('\n');
-                  },
-                  async pull(controller) {
-                    if (this.remaining.length) {
-                      await new Promise(res => setTimeout(res));
-                      controller.enqueue(this.remaining.shift() + '\n');
-                    } else {
-                      controller.close();
-                    }
-                  }
-                })
-              ].entries()) {
-                let stepReached = 0;
-                try {
-                  const message = await openpgp.readMessage({ armoredMessage: encryptedData });
-                  stepReached = 1;
-                  const { data: decrypted } = await openpgp.decrypt({ message: message, decryptionKeys: [key] });
-                  stepReached = 2;
-                  await stream.readToEnd(decrypted);
-                } catch (e) {
-                  expect(e.message).to.match(/Modification detected|Authentication tag mismatch|Unsupported state or unable to authenticate data/);
-                  expect(stepReached).to.equal(
-                    i === 0 ? 1 :
-                      (openpgp.config.aeadChunkSizeByte === 0 && (i === 2 || detectNode() || util.getHardwareConcurrency() < 8)) || (!openpgp.config.aeadProtect && openpgp.config.allowUnauthenticatedStream) ? 2 :
-                        1
-                  );
-                  return;
-                }
-                throw new Error(`Expected "Modification detected" error in subtest ${i}`);
+          // need to generate new key with AEAD support
+          const { privateKey } = await openpgp.generateKey({ userIDs: [{ email: 'test@email.com' }], type: 'rsa', format: 'object' });
+          const [, aeadAlgo] = await getPreferredCipherSuite([privateKey], undefined, undefined, openpgp.config);
+          // sanity check
+          expect(aeadAlgo).to.equal(openpgp.config.aeadProtect ? openpgp.config.preferredAEADAlgorithm : 0);
+
+          const encrypted = await openpgp.encrypt({
+            message: await openpgp.createMessage({ binary: new Uint8Array(500) }),
+            encryptionKeys: privateKey
+          });
+          // corrupt the SEIPD packet
+          const encryptedCorrupted = encrypted.substr(0, 1000) + (encrypted[1000] === 'a' ? 'b' : 'a') + encrypted.substr(1001);
+
+          const generateSingleChunkStream = () => (
+            new ReadableStream({
+              start(controller) {
+                controller.enqueue(encryptedCorrupted);
+                controller.close();
               }
+            })
+          );
+          const generateMultiChunkStream = () => (
+            new ReadableStream({
+              start() {
+                this.remaining = encryptedCorrupted.split('\n');
+              },
+              async pull(controller) {
+                if (this.remaining.length) {
+                  // sleep to slow down enqeueing
+                  await new Promise(resolve => { setTimeout(resolve); });
+                  controller.enqueue(this.remaining.shift() + '\n');
+                } else {
+                  controller.close();
+                }
+              }
+            })
+          );
+
+          if (openpgp.config.aeadProtect) {
+            const expectedError = /Authentication tag mismatch|Unsupported state or unable to authenticate data/;
+            // AEAD fails either on AEAD chunk decryption or when reading the decrypted stream, based on a race condition:
+            // smaller AEAD chunks mean higher overhead, hence slower stream decryption, namely openpgp.decrypt returns before
+            // the mismatching chunk/tag are processed.
+            const expectStreamingFailingOnDecrypt = openpgp.config.aeadProtect && openpgp.config.aeadChunkSizeByte > 0;
+            await Promise.all([
+              testStreamingDecryption(encryptedCorrupted, true, expectedError, true),
+              testStreamingDecryption(encryptedCorrupted, false, expectedError, true),
+              // `config.allowUnauthenticatedStream` does not apply to AEAD
+              testStreamingDecryption(generateSingleChunkStream(), true, expectedError, expectStreamingFailingOnDecrypt),
+              testStreamingDecryption(generateSingleChunkStream(), false, expectedError, expectStreamingFailingOnDecrypt),
+              // Increasing number of streaming chunks should not affect the result
+              testStreamingDecryption(generateMultiChunkStream(), true, expectedError, expectStreamingFailingOnDecrypt),
+              testStreamingDecryption(generateMultiChunkStream(), false, expectedError, expectStreamingFailingOnDecrypt)
+            ]);
+          } else {
+            const expectedError = /Modification detected/;
+            await Promise.all([
+              testStreamingDecryption(encryptedCorrupted, true, expectedError, true),
+              testStreamingDecryption(encryptedCorrupted, false, expectedError, true),
+              testStreamingDecryption(generateSingleChunkStream(), true, expectedError, false),
+              testStreamingDecryption(generateSingleChunkStream(), false, expectedError, true),
+              // Increasing number of streaming chunks should not affect the result
+              testStreamingDecryption(generateMultiChunkStream(), true, expectedError, false),
+              testStreamingDecryption(generateMultiChunkStream(), false, expectedError, true)
+            ]);
+          }
+
+          async function testStreamingDecryption(encryptedDataOrStream, allowUnauthenticatedStream, expectedErrorMessage, expectedFailureOnDecrypt) {
+            let stepReached = 0;
+            // parsing the message won't fail since armor checksum is ignored
+            const message = await openpgp.readMessage({ armoredMessage: encryptedDataOrStream });
+
+            try {
+              stepReached = 1;
+              const { data: decrypted } = await openpgp.decrypt({
+                message,
+                decryptionKeys: [privateKey],
+                config: { allowUnauthenticatedStream }
+              });
+              stepReached = 2;
+              await stream.readToEnd(decrypted);
+              // expected to have thrown
+              throw new Error(`Expected decryption to fail with error ${expectedErrorMessage}`);
+            } catch (e) {
+              expect(e.message).to.match(expectedErrorMessage);
+              expect(stepReached).to.equal(expectedFailureOnDecrypt ? 1 : 2);
             }
-          } finally {
-            openpgp.config.allowUnauthenticatedStream = allowUnauthenticatedStream;
           }
         });
 
