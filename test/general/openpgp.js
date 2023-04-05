@@ -2961,19 +2961,21 @@ XfA3pqV4mTzF
 
           if (openpgp.config.aeadProtect) {
             const expectedError = /Authentication tag mismatch|Unsupported state or unable to authenticate data/;
-            // AEAD fails either on AEAD chunk decryption or when reading the decrypted stream, based on a race condition:
-            // smaller AEAD chunks mean higher overhead, hence slower stream decryption, namely openpgp.decrypt returns before
-            // the mismatching chunk/tag are processed.
-            const expectStreamingFailingOnDecrypt = openpgp.config.aeadProtect && openpgp.config.aeadChunkSizeByte > 0;
+            // AEAD fails either on AEAD chunk decryption or when reading the decrypted stream,
+            // due on a race condition: based on the corrupted chunk position and the processing speed,
+            // the error might be thrown when the decrypted stream is read by Packetlist.fromBinary,
+            // namely before `openpgp.decrypt` returns.
+            // So, for streamed AEAD decryption, we only check that the authentication error was thrown,
+            // but not when.
             await Promise.all([
               testStreamingDecryption(encryptedCorrupted, true, expectedError, true),
               testStreamingDecryption(encryptedCorrupted, false, expectedError, true),
               // `config.allowUnauthenticatedStream` does not apply to AEAD
-              testStreamingDecryption(generateSingleChunkStream(), true, expectedError, expectStreamingFailingOnDecrypt),
-              testStreamingDecryption(generateSingleChunkStream(), false, expectedError, expectStreamingFailingOnDecrypt),
+              testStreamingDecryption(generateSingleChunkStream(), true, expectedError),
+              testStreamingDecryption(generateSingleChunkStream(), false, expectedError),
               // Increasing number of streaming chunks should not affect the result
-              testStreamingDecryption(generateMultiChunkStream(), true, expectedError, expectStreamingFailingOnDecrypt),
-              testStreamingDecryption(generateMultiChunkStream(), false, expectedError, expectStreamingFailingOnDecrypt)
+              testStreamingDecryption(generateMultiChunkStream(), true, expectedError),
+              testStreamingDecryption(generateMultiChunkStream(), false, expectedError)
             ]);
           } else {
             const expectedError = /Modification detected/;
@@ -2988,25 +2990,26 @@ XfA3pqV4mTzF
             ]);
           }
 
-          async function testStreamingDecryption(encryptedDataOrStream, allowUnauthenticatedStream, expectedErrorMessage, expectedFailureOnDecrypt) {
-            let stepReached = 0;
+          async function testStreamingDecryption(encryptedDataOrStream, allowUnauthenticatedStream, expectedErrorMessage, expectedFailureOnDecrypt = null) {
             // parsing the message won't fail since armor checksum is ignored
             const message = await openpgp.readMessage({ armoredMessage: encryptedDataOrStream });
+            let didFailOnDecrypt = true;
 
             try {
-              stepReached = 1;
               const { data: decrypted } = await openpgp.decrypt({
                 message,
                 decryptionKeys: [privateKey],
                 config: { allowUnauthenticatedStream }
               });
-              stepReached = 2;
+              didFailOnDecrypt = false;
               await stream.readToEnd(decrypted);
               // expected to have thrown
               throw new Error(`Expected decryption to fail with error ${expectedErrorMessage}`);
             } catch (e) {
               expect(e.message).to.match(expectedErrorMessage);
-              expect(stepReached).to.equal(expectedFailureOnDecrypt ? 1 : 2);
+              if (expectedFailureOnDecrypt !== null) {
+                expect(didFailOnDecrypt).to.equal(expectedFailureOnDecrypt);
+              }
             }
           }
         });
