@@ -2190,6 +2190,7 @@ XfA3pqV4mTzF
     });
 
     tryTests('OCB mode', tests, {
+      if: true,
       beforeEach: function() {
         openpgp.config.aeadProtect = true;
         openpgp.config.preferredAEADAlgorithm = openpgp.enums.aead.ocb;
@@ -2961,21 +2962,18 @@ XfA3pqV4mTzF
 
           if (openpgp.config.aeadProtect) {
             const expectedError = /Authentication tag mismatch|Unsupported state or unable to authenticate data/;
-            // AEAD fails either on AEAD chunk decryption or when reading the decrypted stream,
-            // due on a race condition: based on the corrupted chunk position and the processing speed,
-            // the error might be thrown when the decrypted stream is read by Packetlist.fromBinary,
-            // namely before `openpgp.decrypt` returns.
-            // So, for streamed AEAD decryption, we only check that the authentication error was thrown,
-            // but not when.
+            // AEAD fails either on AEAD chunk decryption or when reading the decrypted stream:
+            // if the corruption is in the first AEAD chunk, then `openpgp.decrypt` will throw
+            // when reading the decrypted stream to parse the packet list.
             await Promise.all([
               testStreamingDecryption(encryptedCorrupted, true, expectedError, true),
               testStreamingDecryption(encryptedCorrupted, false, expectedError, true),
               // `config.allowUnauthenticatedStream` does not apply to AEAD
-              testStreamingDecryption(generateSingleChunkStream(), true, expectedError),
-              testStreamingDecryption(generateSingleChunkStream(), false, expectedError),
+              testStreamingDecryption(generateSingleChunkStream(), true, expectedError, openpgp.config.aeadChunkSizeByte > 0),
+              testStreamingDecryption(generateSingleChunkStream(), false, expectedError, openpgp.config.aeadChunkSizeByte > 0),
               // Increasing number of streaming chunks should not affect the result
-              testStreamingDecryption(generateMultiChunkStream(), true, expectedError),
-              testStreamingDecryption(generateMultiChunkStream(), false, expectedError)
+              testStreamingDecryption(generateMultiChunkStream(), true, expectedError, openpgp.config.aeadChunkSizeByte > 0),
+              testStreamingDecryption(generateMultiChunkStream(), false, expectedError, openpgp.config.aeadChunkSizeByte > 0)
             ]);
           } else {
             const expectedError = /Modification detected/;
@@ -3007,9 +3005,7 @@ XfA3pqV4mTzF
               throw new Error(`Expected decryption to fail with error ${expectedErrorMessage}`);
             } catch (e) {
               expect(e.message).to.match(expectedErrorMessage);
-              if (expectedFailureOnDecrypt !== null) {
-                expect(didFailOnDecrypt).to.equal(expectedFailureOnDecrypt);
-              }
+              expect(didFailOnDecrypt).to.equal(expectedFailureOnDecrypt);
             }
           }
         });
