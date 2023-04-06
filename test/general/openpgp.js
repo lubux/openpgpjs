@@ -2923,9 +2923,9 @@ XfA3pqV4mTzF
           loadStreamsPolyfill();
           // need to generate new key with AEAD support
           const { privateKey } = await openpgp.generateKey({ userIDs: [{ email: 'test@email.com' }], type: 'rsa', format: 'object' });
-          const [, aeadAlgo] = await getPreferredCipherSuite([privateKey], undefined, undefined, openpgp.config);
+          const { aeadAlgo } = await getPreferredCipherSuite([privateKey], undefined, undefined, openpgp.config);
           // sanity check
-          expect(aeadAlgo).to.equal(openpgp.config.aeadProtect ? openpgp.config.preferredAEADAlgorithm : 0);
+          expect(aeadAlgo).to.equal(openpgp.config.aeadProtect ? openpgp.config.preferredAEADAlgorithm : undefined);
 
           const encrypted = await openpgp.encrypt({
             message: await openpgp.createMessage({ binary: new Uint8Array(500) }),

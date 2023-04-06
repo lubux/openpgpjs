@@ -351,12 +351,12 @@ export class Message {
    * @async
    */
   static async generateSessionKey(encryptionKeys = [], date = new Date(), userIDs = [], config = defaultConfig) {
-    const [symAlgo, aeadAlgo] = await getPreferredCipherSuite(encryptionKeys, date, userIDs, config);
-    const symAlgoName = enums.read(enums.symmetric, symAlgo);
+    const { symmetricAlgo, aeadAlgo } = await getPreferredCipherSuite(encryptionKeys, date, userIDs, config);
+    const symmetricAlgoName = enums.read(enums.symmetric, symmetricAlgo);
     const aeadAlgoName = aeadAlgo ? enums.read(enums.aead, aeadAlgo) : undefined;
 
-    const sessionKeyData = crypto.generateSessionKey(symAlgo);
-    return { data: sessionKeyData, algorithm: symAlgoName, aeadAlgorithm: aeadAlgoName };
+    const sessionKeyData = crypto.generateSessionKey(symmetricAlgo);
+    return { data: sessionKeyData, algorithm: symmetricAlgoName, aeadAlgorithm: aeadAlgoName };
   }
 
   /**

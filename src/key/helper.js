@@ -175,28 +175,28 @@ export async function getPreferredCompressionAlgo(keys = [], date = new Date(), 
  * @param {Date} [date] - Use the given date for verification instead of the current time
  * @param {Array} [userIDs] - User IDs
  * @param {Object} [config] - Full configuration, defaults to openpgp.config
- * @returns {Promise<[module:enums.symmetric,module:enums.aead|0]>} Array containing the preferred symmetric algorithm, and the preferred AEAD algorithm, or 0 if CFB is preferred
+ * @returns {Promise<{ symmetricAlgo: module:enums.symmetric, aeadAlgo: module:enums.aead | undefined }>} Object containing the preferred symmetric algorithm, and the preferred AEAD algorithm, or undefined if CFB is preferred
  * @async
  */
 export async function getPreferredCipherSuite(keys = [], date = new Date(), userIDs = [], config = defaultConfig) {
   const selfSigs = await Promise.all(keys.map((key, i) => key.getPrimarySelfSignature(date, userIDs[i], config)));
   if (config.aeadProtect && selfSigs.every(selfSig => selfSig.features[0] & enums.features.seipdv2)) {
-    const defaultCipherSuite = [enums.symmetric.aes128, enums.aead.ocb];
-    const desiredCipherSuite = [config.preferredSymmetricAlgorithm, config.preferredAEADAlgorithm];
+    const defaultCipherSuite = { symmetricAlgo: enums.symmetric.aes128, aeadAlgo: enums.aead.ocb };
+    const desiredCipherSuite = { symmetricAlgo: config.preferredSymmetricAlgorithm, aeadAlgo: config.preferredAEADAlgorithm };
     return selfSigs.every(selfSig => selfSig.preferredCipherSuites && selfSig.preferredCipherSuites.some(
-      cipherSuite => cipherSuite[0] === desiredCipherSuite[0] && cipherSuite[1] === desiredCipherSuite[1]
+      cipherSuite => cipherSuite[0] === desiredCipherSuite.symmetricAlgo && cipherSuite[1] === desiredCipherSuite.aeadAlgo
     )) ?
       desiredCipherSuite :
       defaultCipherSuite;
   }
   const defaultSymAlgo = enums.symmetric.aes128;
   const desiredSymAlgo = config.preferredSymmetricAlgorithm;
-  return [
-    selfSigs.every(selfSig => selfSig.preferredSymmetricAlgorithms && selfSig.preferredSymmetricAlgorithms.includes(desiredSymAlgo)) ?
+  return {
+    symmetricAlgo: selfSigs.every(selfSig => selfSig.preferredSymmetricAlgorithms && selfSig.preferredSymmetricAlgorithms.includes(desiredSymAlgo)) ?
       desiredSymAlgo :
       defaultSymAlgo,
-    0
-  ];
+    aeadAlgo: undefined
+  };
 }
 
 /**
