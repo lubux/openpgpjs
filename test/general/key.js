@@ -3358,7 +3358,7 @@ module.exports = () => describe('Key', function() {
     expect(revKey.armor()).not.to.match(/Comment: This is a revocation certificate/);
   });
 
-  it("getPreferredCipherSuite - one key", async function() {
+  it('getPreferredCipherSuite - one key', async function() {
     const [key1] = await openpgp.readKeys({ armoredKeys: twoKeys });
     const [symAlgo, aeadAlgo] = await getPreferredCipherSuite([key1], undefined, undefined, {
       ...openpgp.config, preferredSymmetricAlgorithm: openpgp.enums.symmetric.aes256
@@ -3367,7 +3367,7 @@ module.exports = () => describe('Key', function() {
     expect(aeadAlgo).to.equal(0);
   });
 
-  it("getPreferredCipherSuite - two keys", async function() {
+  it('getPreferredCipherSuite - two keys', async function() {
     const { aes128, aes192, cast5 } = openpgp.enums.symmetric;
     const [key1, key2] = await openpgp.readKeys({ armoredKeys: twoKeys });
     const primaryUser = await key2.getPrimaryUser();
@@ -3384,7 +3384,7 @@ module.exports = () => describe('Key', function() {
     expect(aeadAlgo2).to.equal(0);
   });
 
-  it("getPreferredCipherSuite - two keys - one without pref", async function() {
+  it('getPreferredCipherSuite - two keys - one without pref', async function() {
     const [key1, key2] = await openpgp.readKeys({ armoredKeys: twoKeys });
     const primaryUser = await key2.getPrimaryUser();
     primaryUser.selfCertification.preferredSymmetricAlgorithms = null;
@@ -3393,7 +3393,7 @@ module.exports = () => describe('Key', function() {
     expect(aeadAlgo).to.equal(0);
   });
 
-  it("getPreferredCipherSuite with AEAD - one key - GCM", async function() {
+  it('getPreferredCipherSuite with AEAD - one key - GCM', async function() {
     const [key1] = await openpgp.readKeys({ armoredKeys: twoKeys });
     const primaryUser = await key1.getPrimaryUser();
     primaryUser.selfCertification.features = [9]; // Monkey-patch SEIPDv2 feature flag
@@ -3407,7 +3407,7 @@ module.exports = () => describe('Key', function() {
     expect(aeadAlgo).to.equal(openpgp.enums.aead.gcm);
   });
 
-  it("getPreferredCipherSuite with AEAD - two keys - one without pref", async function() {
+  it('getPreferredCipherSuite with AEAD - two keys - one without pref', async function() {
     const keys = await openpgp.readKeys({ armoredKeys: twoKeys });
     const key1 = keys[0];
     const key2 = keys[1];
@@ -3424,7 +3424,7 @@ module.exports = () => describe('Key', function() {
     expect(aeadAlgo).to.equal(openpgp.enums.aead.ocb);
   });
 
-  it("getPreferredCipherSuite with AEAD - two keys - one with no support", async function() {
+  it('getPreferredCipherSuite with AEAD - two keys - one with no support', async function() {
     const keys = await openpgp.readKeys({ armoredKeys: twoKeys });
     const key1 = keys[0];
     const key2 = keys[1];

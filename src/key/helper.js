@@ -183,8 +183,9 @@ export async function getPreferredCipherSuite(keys = [], date = new Date(), user
   if (config.aeadProtect && selfSigs.every(selfSig => selfSig.features[0] & enums.features.seipdv2)) {
     const defaultCipherSuite = [enums.symmetric.aes128, enums.aead.ocb];
     const desiredCipherSuite = [config.preferredSymmetricAlgorithm, config.preferredAEADAlgorithm];
-    return selfSigs.every(selfSig => selfSig.preferredCipherSuites && selfSig.preferredCipherSuites.some(cipherSuite =>
-      cipherSuite[0] === desiredCipherSuite[0] && cipherSuite[1] === desiredCipherSuite[1])) ?
+    return selfSigs.every(selfSig => selfSig.preferredCipherSuites && selfSig.preferredCipherSuites.some(
+      cipherSuite => cipherSuite[0] === desiredCipherSuite[0] && cipherSuite[1] === desiredCipherSuite[1]
+    )) ?
       desiredCipherSuite :
       defaultCipherSuite;
   }

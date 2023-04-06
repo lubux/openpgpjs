@@ -79,7 +79,7 @@ class PublicKeyEncryptedSessionKeyPacket {
     }
     if (this.version === 6) {
       this.publicKeyVersion = bytes[offset++];
-      let fingerprintLength = this.publicKeyVersion ? (this.publicKeyVersion >= 5 ? 32 : 20) : 0;
+      const fingerprintLength = this.publicKeyVersion ? (this.publicKeyVersion >= 5 ? 32 : 20) : 0;
       this.publicKeyFingerprint = bytes.subarray(offset, offset + fingerprintLength);
       offset += fingerprintLength;
       if (this.publicKeyVersion === 0) {

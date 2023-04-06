@@ -14,7 +14,6 @@ const { getPreferredCipherSuite } = require('../../src/key');
 
 const input = require('./testInputs');
 
-const detectNode = () => typeof globalThis.process === 'object' && typeof globalThis.process.versions === 'object';
 const detectBrowser = () => typeof navigator === 'object';
 
 const pub_key = [
