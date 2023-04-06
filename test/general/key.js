@@ -2712,7 +2712,7 @@ module.exports = () => describe('Key', function() {
   let aeadProtectVal;
 
   tryTests('V4', versionSpecificTests, {
-    if: !openpgp.config.ci,
+    if: true,
     beforeEach: function() {
       v6KeysVal = openpgp.config.v6Keys;
       openpgp.config.v6Keys = false;
@@ -2723,7 +2723,7 @@ module.exports = () => describe('Key', function() {
   });
 
   tryTests('V6', versionSpecificTests, {
-    if: !openpgp.config.ci,
+    if: true,
     beforeEach: function() {
       v6KeysVal = openpgp.config.v6Keys;
       aeadProtectVal = openpgp.config.aeadProtect;
@@ -2774,6 +2774,209 @@ module.exports = () => describe('Key', function() {
     const packetlist = await openpgp.PacketList.fromBinary(packetBytes, util.constructAllowedPackets([openpgp.PublicKeyPacket]), openpgp.config);
     const key = packetlist[0];
     expect(key).to.exist;
+  });
+
+  it('Parsing, decrypting, encrypting and serializing V5 key (AEAD-encrypted)', async function() {
+    const armoredKey = `-----BEGIN PGP PRIVATE KEY BLOCK-----
+
+xYwFZC7tvxYAAAAtCSsGAQQB2kcPAQEHQP/d1oBAqCKZYxb6k8foyX2Aa/VK
+dHFymZPGvHRk1ncs/R0JAQMIrDnS3Bany9EAF6dwQSfPSdObc4ROYIMAnwAA
+ADKV1OhGzwANnapimvODI6fK5F7/V0GxETY9WmnipnBzr4Fe9GZw4QD4Q4hd
+IJMawjUBrs0MdjVAYWVhZC50ZXN0wpIFEBYKAEQFgmQu7b8ECwkHCAMVCAoE
+FgACAQIZAQKbAwIeByKhBQ/Y89PNwfdXUdI/td5Q9rNrYP9mb7Dg6k/3nxTg
+ugQ5AyIBAgAAf0kBAJv0OQvd4u8R0f3HAsmQeqMnwNA4or75BOn/ieApNZUt
+AP9kQVmYEk4+MV57Us15l2kQEslLDr3qiH5+VCICdEprB8eRBWQu7b8SAAAA
+MgorBgEEAZdVAQUBAQdA4IgEkfze3eNKRz6DgzGSJxw/CV/5Rp5u4Imn47h7
+pyADAQgH/R0JAQMIwayD3R4E0ugAyszSmOIpaLJ40YGBp5uU7wAAADKmSv4W
+tio7GfZCVl8eJ7xX3J1b0iMvEm876tUeHANQlYYCWz+2ahmPVe79zzZA9OhN
+FcJ6BRgWCAAsBYJkLu2/ApsMIqEFD9jz083B91dR0j+13lD2s2tg/2ZvsODq
+T/efFOC6BDkAAHcjAPwIPNHnR9bKmkVop6cE05dCIpZ/W8zXDGnjKYrrC4Hb
+4gEAmISD1GRkNOmCV8aHwN5svO6HuwXR4cR3o3l7HlYeag8=
+=wpkQ
+-----END PGP PRIVATE KEY BLOCK-----`;
+    const passphrase = 'password';
+    const encryptedKey = await openpgp.readKey({ armoredKey });
+    const decryptedKey = await openpgp.decryptKey({
+      privateKey: encryptedKey,
+      passphrase
+    });
+    const reecryptedKey = await openpgp.encryptKey({
+      privateKey: decryptedKey,
+      passphrase,
+      config: { aeadProtect: true }
+    });
+    expect(reecryptedKey.keyPacket.s2kUsage).to.equal(253);
+    const redecryptedKey = await openpgp.decryptKey({
+      privateKey: reecryptedKey,
+      passphrase
+    });
+    expect(redecryptedKey.write()).to.deep.equal(decryptedKey.write());
+  });
+
+  it('Parsing, decrypting, encrypting and serializing V4 key (AEAD-encrypted)', async function() {
+    // key from gopenpgp
+    const armoredKey = `-----BEGIN PGP PRIVATE KEY BLOCK-----
+
+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
+oZIvKIVq9Vqf8XJVjMDbRMNTmh3a5A==
+-----END PGP PRIVATE KEY BLOCK-----`;
+    const passphrase = 'password';
+    const encryptedKey = await openpgp.readKey({ armoredKey });
+    const decryptedKey = await openpgp.decryptKey({
+      privateKey: encryptedKey,
+      passphrase
+    });
+    const reecryptedKey = await openpgp.encryptKey({
+      privateKey: decryptedKey,
+      passphrase,
+      config: { aeadProtect: true }
+    });
+    expect(reecryptedKey.keyPacket.s2kUsage).to.equal(253);
+    const redecryptedKey = await openpgp.decryptKey({
+      privateKey: reecryptedKey,
+      passphrase
+    });
+    expect(redecryptedKey.write()).to.deep.equal(decryptedKey.write());
+  });
+
+  it('Parsing, decrypting, encrypting and serializing V6 key (AEAD-encrypted)', async function() {
+    // TODO replace with test vector from RFC once new Ed25519 is implemented
+    const armoredKey = `-----BEGIN PGP PRIVATE KEY BLOCK-----
+
+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
+-----END PGP PRIVATE KEY BLOCK-----`;
+    const passphrase = 'password';
+    const encryptedKey = await openpgp.readKey({ armoredKey });
+    const decryptedKey = await openpgp.decryptKey({
+      privateKey: encryptedKey,
+      passphrase
+    });
+    const reecryptedKey = await openpgp.encryptKey({
+      privateKey: decryptedKey,
+      passphrase,
+      config: { aeadProtect: true }
+    });
+    expect(reecryptedKey.keyPacket.s2kUsage).to.equal(253);
+    const redecryptedKey = await openpgp.decryptKey({
+      privateKey: reecryptedKey,
+      passphrase
+    });
+    expect(redecryptedKey.write()).to.deep.equal(decryptedKey.write());
   });
 
   it('Testing key ID and fingerprint for V4 keys', async function() {
