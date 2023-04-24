@@ -185,7 +185,7 @@ module.exports = () => describe('ECDH key exchange @lightweight', function () {
     const b = util.hexToUint8Array('5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb');
     const K_B = util.hexToUint8Array('de9edb7d7b7dc1b4d35b61c2ece435373f8343c85b78674dadfc7e146f882b4f');
     const { ephemeralPublicKey, wrappedKey } = await ecdhMontgomery.encrypt(openpgp.enums.publicKey.x25519, data, K_B);
-    expect(await ecdhMontgomery.decrypt(openpgp.enums.publicKey.x25519, ephemeralPublicKey, wrappedKey, b)).to.deep.equal(data);
+    expect(await ecdhMontgomery.decrypt(openpgp.enums.publicKey.x25519, ephemeralPublicKey, wrappedKey, K_B, b)).to.deep.equal(data);
   });
 
   ['p256', 'p384', 'p521'].forEach(curveName => {

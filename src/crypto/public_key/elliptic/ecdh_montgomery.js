@@ -96,8 +96,13 @@ export async function encrypt(algo, data, recipientA) {
       const ephemeralSecretKey = getRandomBytes(32);
       const sharedSecret = nacl.scalarMult(ephemeralSecretKey, recipientA);
       const { publicKey: ephemeralPublicKey } = nacl.box.keyPair.fromSecretKey(ephemeralSecretKey);
+      const hkdfInput = util.concatUint8Array([
+        ephemeralPublicKey,
+        recipientA,
+        sharedSecret
+      ]);
       const { keySize } = getCipher(enums.symmetric.aes128);
-      const encryptionKey = await computeHKDF(enums.hash.sha256, sharedSecret, new Uint8Array(), HKDF_INFO.x25519, keySize);
+      const encryptionKey = await computeHKDF(enums.hash.sha256, hkdfInput, new Uint8Array(), HKDF_INFO.x25519, keySize);
       const wrappedKey = aesKW.wrap(encryptionKey, data);
       return { ephemeralPublicKey, wrappedKey };
     }
@@ -112,17 +117,23 @@ export async function encrypt(algo, data, recipientA) {
  *
  * @param {module:enums.publicKey} algo - Algorithm identifier
  * @param {Uint8Array} ephemeralPublicKey - (K_A)
- * @param {Uint8Array} wrappedKey
+ * @param {Uint8Array} wrappedKey,
+ * @param {Uint8Array} A - Recipient public key (K_b), needed for KDF
  * @param {Uint8Array} k - Recipient secret key (b)
  * @returns {Promise<Uint8Array>} decrypted session key data
  * @async
  */
-export async function decrypt(algo, ephemeralPublicKey, wrappedKey, k) {
+export async function decrypt(algo, ephemeralPublicKey, wrappedKey, A, k) {
   switch (algo) {
     case enums.publicKey.x25519: {
       const sharedSecret = nacl.scalarMult(k, ephemeralPublicKey);
+      const hkdfInput = util.concatUint8Array([
+        ephemeralPublicKey,
+        A,
+        sharedSecret
+      ]);
       const { keySize } = getCipher(enums.symmetric.aes128);
-      const encryptionKey = await computeHKDF(enums.hash.sha256, sharedSecret, new Uint8Array(), HKDF_INFO.x25519, keySize);
+      const encryptionKey = await computeHKDF(enums.hash.sha256, hkdfInput, new Uint8Array(), HKDF_INFO.x25519, keySize);
       return aesKW.unwrap(encryptionKey, wrappedKey);
     }
     default:

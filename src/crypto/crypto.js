@@ -112,10 +112,11 @@ export async function publicKeyDecrypt(algo, publicKeyParams, privateKeyParams, 
         oid, kdfParams, V, C.data, Q, d, fingerprint);
     }
     case enums.publicKey.x25519: {
+      const { A } = publicKeyParams;
       const { k } = privateKeyParams;
       const { ephemeralPublicKey, C } = sessionKeyParams;
       return publicKey.elliptic.ecdhMontgomery.decrypt(
-        algo, ephemeralPublicKey, C.data, k);
+        algo, ephemeralPublicKey, C.data, A, k);
     }
     default:
       throw new Error('Unknown public key encryption algorithm.');
