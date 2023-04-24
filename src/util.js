@@ -382,6 +382,11 @@ const util = {
    */
   getBigInteger,
 
+  getEd448: function() {
+    // TODO: once we rely on Node's native esm, point to @openpgp lib only
+    return this.getNodeCrypto() ? require('@noble/curves/ed448') : import('@openpgp/noble-curves/esm/ed448');
+  },
+
   /**
    * Get native Node.js crypto api.
    * @returns {Object} The crypto module or 'undefined'.

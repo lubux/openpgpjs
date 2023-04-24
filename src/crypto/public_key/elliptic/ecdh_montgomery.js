@@ -22,7 +22,6 @@
  */
 
 import X25519 from '@openpgp/tweetnacl/nacl-fast-light';
-import { x448 as X448 } from '@noble/curves/ed448';
 import * as aesKW from '../../aes_kw';
 import { getRandomBytes } from '../../random';
 
@@ -42,6 +41,7 @@ const HKDF_INFO = {
  * @returns {Promise<{ A: Uint8Array, k: Uint8Array }>}
  */
 export async function generate(algo) {
+  const { x448: X448 } = await util.getEd448();
   const k = getRandomBytes(getPayloadSize(algo));
 
   switch (algo) {
@@ -76,6 +76,8 @@ export async function generate(algo) {
 * @async
 */
 export async function validateParams(algo, A, k) {
+  const { x448: X448 } = await util.getEd448();
+
   switch (algo) {
     case enums.publicKey.x25519: {
       /**
@@ -111,6 +113,7 @@ export async function validateParams(algo, A, k) {
  * @async
  */
 export async function encrypt(algo, data, recipientA) {
+  const { x448: X448 } = await util.getEd448();
   const { k: ephemeralSecretKey, A: ephemeralPublicKey } = await generate(algo);
 
   switch (algo) {
@@ -157,6 +160,8 @@ export async function encrypt(algo, data, recipientA) {
  * @async
  */
 export async function decrypt(algo, ephemeralPublicKey, wrappedKey, A, k) {
+  const { x448: X448 } = await util.getEd448();
+
   switch (algo) {
     case enums.publicKey.x25519: {
       const sharedSecret = X25519.scalarMult(k, ephemeralPublicKey);

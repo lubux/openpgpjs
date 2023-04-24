@@ -23,7 +23,6 @@
 
 import sha512 from 'hash.js/lib/hash/sha/512';
 import Ed25519 from '@openpgp/tweetnacl/nacl-fast-light';
-import { ed448 as Ed448 } from '@noble/curves/ed448';
 import util from '../../../util';
 import enums from '../../../enums';
 import hash from '../../hash';
@@ -37,6 +36,7 @@ Ed25519.hash = bytes => new Uint8Array(sha512().update(bytes).digest());
  * @returns {Promise<{ A: Uint8Array, seed: Uint8Array }>}
  */
 export async function generate(algo) {
+  const { ed448: Ed448 } = await util.getEd448();
   const seed = getRandomBytes(getPayloadSize(algo));
 
   switch (algo) {
@@ -67,6 +67,8 @@ export async function generate(algo) {
  * @async
  */
 export async function sign(algo, hashAlgo, message, publicKey, privateKey, hashed) {
+  const { ed448: Ed448 } = await util.getEd448();
+
   if (hash.getHashByteLength(hashAlgo) < hash.getHashByteLength(enums.hash.sha256)) {
     // see https://tools.ietf.org/id/draft-ietf-openpgp-rfc4880bis-10.html#section-15-7.2
     throw new Error('Hash algorithm too weak: sha256 or stronger is required for EdDSA.');
@@ -99,6 +101,8 @@ export async function sign(algo, hashAlgo, message, publicKey, privateKey, hashe
  * @async
  */
 export async function verify(algo, hashAlgo, { RS }, m, publicKey, hashed) {
+  const { ed448: Ed448 } = await util.getEd448();
+
   switch (algo) {
     case enums.publicKey.ed25519: {
       return Ed25519.sign.detached.verify(hashed, RS, publicKey);
@@ -119,6 +123,8 @@ export async function verify(algo, hashAlgo, { RS }, m, publicKey, hashed) {
  * @async
  */
 export async function validateParams(algo, A, seed) {
+  const { ed448: Ed448 } = await util.getEd448();
+
   switch (algo) {
     case enums.publicKey.ed25519: {
       /**

@@ -58,6 +58,7 @@
     "@openpgp/asmcrypto.js": "^2.3.2",
     "@openpgp/elliptic": "^6.5.1",
     "@openpgp/jsdoc": "^3.6.4",
+    "@openpgp/noble-curves": "git+https://git@github.com/larabr/noble-curves.git#6edd41cb0a5265531fe5730d45893f2691293192",
     "@openpgp/pako": "^1.0.12",
     "@openpgp/seek-bzip": "^1.0.5-git",
     "@openpgp/tweetnacl": "^1.0.3",
