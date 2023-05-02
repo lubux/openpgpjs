@@ -41,7 +41,6 @@ const HKDF_INFO = {
  * @returns {Promise<{ A: Uint8Array, k: Uint8Array }>}
  */
 export async function generate(algo) {
-  const { x448: X448 } = await util.getEd448();
   const k = getRandomBytes(getPayloadSize(algo));
 
   switch (algo) {
@@ -53,6 +52,7 @@ export async function generate(algo) {
       return { A, k };
     }
     case enums.publicKey.x448: {
+      const { x448: X448 } = await util.getEd448();
       // const k = X448.utils.randomPrivateKey(); TODO: waiting for Node bundling fix
 
       // set the two least significant bits of the first byte to 0, and the most
@@ -76,8 +76,6 @@ export async function generate(algo) {
 * @async
 */
 export async function validateParams(algo, A, k) {
-  const { x448: X448 } = await util.getEd448();
-
   switch (algo) {
     case enums.publicKey.x25519: {
       /**
@@ -88,6 +86,7 @@ export async function validateParams(algo, A, k) {
       return util.equalsUint8Array(A, publicKey);
     }
     case enums.publicKey.x448: {
+      const { x448: X448 } = await util.getEd448();
       /**
        * Derive public point A' from private key
        * and expect A == A'
@@ -113,7 +112,6 @@ export async function validateParams(algo, A, k) {
  * @async
  */
 export async function encrypt(algo, data, recipientA) {
-  const { x448: X448 } = await util.getEd448();
   const { k: ephemeralSecretKey, A: ephemeralPublicKey } = await generate(algo);
 
   switch (algo) {
@@ -130,6 +128,7 @@ export async function encrypt(algo, data, recipientA) {
       return { ephemeralPublicKey, wrappedKey };
     }
     case enums.publicKey.x448: {
+      const { x448: X448 } = await util.getEd448();
       // const ephemeralSecretKey = X448.utils.randomPrivateKey();
       const sharedSecret = X448.getSharedSecret(ephemeralSecretKey, recipientA);
       const hkdfInput = util.concatUint8Array([
@@ -160,8 +159,6 @@ export async function encrypt(algo, data, recipientA) {
  * @async
  */
 export async function decrypt(algo, ephemeralPublicKey, wrappedKey, A, k) {
-  const { x448: X448 } = await util.getEd448();
-
   switch (algo) {
     case enums.publicKey.x25519: {
       const sharedSecret = X25519.scalarMult(k, ephemeralPublicKey);
@@ -175,6 +172,8 @@ export async function decrypt(algo, ephemeralPublicKey, wrappedKey, A, k) {
       return aesKW.unwrap(encryptionKey, wrappedKey);
     }
     case enums.publicKey.x448: {
+      const { x448: X448 } = await util.getEd448();
+
       const sharedSecret = X448.getSharedSecret(k, ephemeralPublicKey);
       const hkdfInput = util.concatUint8Array([
         ephemeralPublicKey,
