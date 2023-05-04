@@ -216,7 +216,7 @@ class SymEncryptedIntegrityProtectedDataPacket {
       const { keySize } = crypto.getCipher(this.cipherAlgorithm);
       const { ivLength } = crypto.getAEADMode(this.aeadAlgorithm);
       const info = new Uint8Array(adataBuffer, 0, 5);
-      const derived = await HKDF(key, this.salt, info, keySize + ivLength);
+      const derived = await HKDF(enums.hash.sha256, key, this.salt, info, keySize + ivLength);
       key = derived.subarray(0, keySize);
       iv = derived.subarray(keySize); // The last 8 bytes of HKDF output are unneeded, but this avoids one copy.
       iv.fill(0, iv.length - 8);

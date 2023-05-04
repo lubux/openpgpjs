@@ -143,13 +143,10 @@ class PublicKeyEncryptedSessionKeyPacket {
    * @async
    */
   async encrypt(key) {
-    const data = util.concatUint8Array([
-      new Uint8Array(this.version === 6 ? [] : [enums.write(enums.symmetric, this.sessionKeyAlgorithm)]),
-      this.sessionKey
-    ]);
     const algo = enums.write(enums.publicKey, this.publicKeyAlgorithm);
+    const encoded = encodeSessionKey(this.version, algo, this.sessionKeyAlgorithm, this.sessionKey);
     this.encrypted = await crypto.publicKeyEncrypt(
-      algo, key.publicParams, data, key.getFingerprintBytes());
+      algo, key.publicParams, encoded, key.getFingerprintBytes());
   }
 
   /**
@@ -166,30 +163,96 @@ class PublicKeyEncryptedSessionKeyPacket {
       throw new Error('Decryption error');
     }
 
-    const randomPayload = randomSessionKey ? util.concatUint8Array([
-      new Uint8Array(this.version === 6 ? [] : [randomSessionKey.sessionKeyAlgorithm]),
-      randomSessionKey.sessionKey,
-      util.writeChecksum(randomSessionKey.sessionKey)
-    ]) : null;
-    const decoded = await crypto.publicKeyDecrypt(this.publicKeyAlgorithm, key.publicParams, key.privateParams, this.encrypted, key.getFingerprintBytes(), randomPayload);
-    let offset = 0;
-    const symmetricAlgoByte = this.version === 3 ? decoded[offset++] : null;
-    let sessionKey = decoded.subarray(offset);
+    const randomPayload = randomSessionKey ?
+      encodeSessionKey(this.version, this.publicKeyAlgorithm, randomSessionKey.sessionKeyAlgorithm, randomSessionKey.sessionKey) :
+      null;
+    const decryptedData = await crypto.publicKeyDecrypt(this.publicKeyAlgorithm, key.publicParams, key.privateParams, this.encrypted, key.getFingerprintBytes(), randomPayload);
 
-    if (this.version === 3) {
-      if (randomSessionKey) {
-        // We must not leak info about the validity of the cipher algo.
-        // Therefore, we always use the cipher algo we guessed it will be, and hope it is correct.
-        // If it is not correct, decryption will fail. Hopefully it will succeed with the next algorithm we try :)
-        this.sessionKeyAlgorithm = randomSessionKey.sessionKeyAlgorithm;
-        // If the decrypted algorithm identifier was wrong, use the random session key rather than the decrypted one.
-        sessionKey = util.selectUint8Array(symmetricAlgoByte === randomSessionKey.sessionKeyAlgorithm, sessionKey, randomSessionKey.sessionKey);
-      } else {
-        this.sessionKeyAlgorithm = symmetricAlgoByte;
-      }
-    }
+    const { sessionKey, sessionKeyAlgorithm } = decodeSessionKey(this.version, this.publicKeyAlgorithm, decryptedData, randomSessionKey);
+
+    this.sessionKeyAlgorithm = sessionKeyAlgorithm;
     this.sessionKey = sessionKey;
   }
 }
 
 export default PublicKeyEncryptedSessionKeyPacket;
+
+
+function encodeSessionKey(version, algo, cipherAlgo, sessionKeyData) {
+  switch (algo) {
+    case enums.publicKey.rsaEncrypt:
+    case enums.publicKey.rsaEncryptSign:
+    case enums.publicKey.elgamal:
+    case enums.publicKey.ecdh: {
+      // add checksum
+      return util.concatUint8Array([
+        new Uint8Array(version === 6 ? [] : [cipherAlgo]),
+        sessionKeyData,
+        util.writeChecksum(sessionKeyData.subarray(sessionKeyData.length % 8))
+      ]);
+
+    }
+    case enums.publicKey.x25519: {
+      return version === 6 ?
+        sessionKeyData :
+        util.concatUint8Array([
+          new Uint8Array([cipherAlgo]),
+          new Uint8Array(7),
+          sessionKeyData
+        ]);
+    }
+    default:
+      throw new Error('Unsupported public key algorithm');
+  }
+}
+
+
+function decodeSessionKey(version, algo, decryptedData, randomSessionKey) {
+  switch (algo) {
+    case enums.publicKey.rsaEncrypt:
+    case enums.publicKey.rsaEncryptSign:
+    case enums.publicKey.elgamal:
+    case enums.publicKey.ecdh: {
+      // verify checksum in constant time
+      const result = decryptedData.subarray(0, decryptedData.length - 2);
+      const checksum = decryptedData.subarray(decryptedData.length - 2);
+      const computedChecksum = util.writeChecksum(result.subarray(result.length % 8));
+      const isValidChecksum = computedChecksum[0] === checksum[0] & computedChecksum[1] === checksum[1];
+      const decryptedSessionKey = {
+        sessionKeyAlgorithm: version === 6 ? null : result[0],
+        sessionKey: version === 6 ? result : result.subarray(1)
+      };
+      if (randomSessionKey) {
+        // We must not leak info about the validity of the decrypted checksum or cipher algo.
+        // The decrypted session key must be of the same algo and size as the random session key, otherwise we discard it and use the random data.
+        const isMatchingSessionKeyAlgorithm = version === 6 || decryptedSessionKey.sessionKeyAlgorithm === randomSessionKey.sessionKeyAlgorithm;
+        const isValidPayload = isValidChecksum & isMatchingSessionKeyAlgorithm & decryptedSessionKey.sessionKey.length === randomSessionKey.sessionKey.length;
+        return {
+          sessionKey: util.selectUint8Array(isValidPayload, decryptedSessionKey.sessionKey, randomSessionKey.sessionKey),
+          sessionKeyAlgorithm: version === 6 ? null : util.selectUint8(
+            isValidPayload,
+            decryptedSessionKey.sessionKeyAlgorithm,
+            randomSessionKey.sessionKeyAlgorithm
+          )
+        };
+      } else {
+        const isValidPayload = isValidChecksum && (version === 6 || enums.read(enums.symmetric, decryptedSessionKey.sessionKeyAlgorithm));
+        if (isValidPayload) {
+          return decryptedSessionKey;
+        } else {
+          throw new Error('Decryption error');
+        }
+      }
+    }
+    case enums.publicKey.x25519: {
+      return version === 6 ?
+        { sessionKey: decryptedData } :
+        {
+          sessionKeyAlgorithm: decryptedData[0],
+          sessionKey: decryptedData.subarray(8)
+        };
+    }
+    default:
+      throw new Error('Unsupported public key algorithm');
+  }
+}

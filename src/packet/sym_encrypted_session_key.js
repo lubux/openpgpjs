@@ -169,7 +169,7 @@ class SymEncryptedSessionKeyPacket {
     if (this.version >= 5) {
       const mode = crypto.getAEADMode(this.aeadAlgorithm);
       const adata = new Uint8Array([0xC0 | SymEncryptedSessionKeyPacket.tag, this.version, this.sessionKeyEncryptionAlgorithm, this.aeadAlgorithm]);
-      const encryptionKey = this.version === 6 ? await HKDF(key, new Uint8Array(), adata, keySize) : key;
+      const encryptionKey = this.version === 6 ? await HKDF(enums.hash.sha256, key, new Uint8Array(), adata, keySize) : key;
       const modeInstance = await mode(algo, encryptionKey);
       this.sessionKey = await modeInstance.decrypt(this.encrypted, this.iv, adata);
     } else if (this.encrypted !== null) {
@@ -210,7 +210,7 @@ class SymEncryptedSessionKeyPacket {
       const mode = crypto.getAEADMode(this.aeadAlgorithm);
       this.iv = crypto.random.getRandomBytes(mode.ivLength); // generate new random IV
       const adata = new Uint8Array([0xC0 | SymEncryptedSessionKeyPacket.tag, this.version, this.sessionKeyEncryptionAlgorithm, this.aeadAlgorithm]);
-      const encryptionKey = this.version === 6 ? await HKDF(key, new Uint8Array(), adata, keySize) : key;
+      const encryptionKey = this.version === 6 ? await HKDF(enums.hash.sha256, key, new Uint8Array(), adata, keySize) : key;
       const modeInstance = await mode(algo, encryptionKey);
       this.encrypted = await modeInstance.encrypt(this.sessionKey, this.iv, adata);
     } else {

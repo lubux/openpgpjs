@@ -496,7 +496,7 @@ async function produceEncryptionKey(keyVersion, s2k, passphrase, cipherAlgo, aea
     serializedPacketTag,
     new Uint8Array([keyVersion, cipherAlgo, aeadMode])
   ]);
-  return computeHKDF(derivedKey, new Uint8Array(), info, keySize);
+  return computeHKDF(enums.hash.sha256, derivedKey, new Uint8Array(), info, keySize);
 }
 
 export default SecretKeyPacket;

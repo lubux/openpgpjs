@@ -47,7 +47,6 @@ import { UnsupportedError } from '../packet/packet';
  * @async
  */
 export async function publicKeyEncrypt(algo, publicParams, data, fingerprint) {
-  data = util.concatUint8Array([data, util.writeChecksum(data.subarray(data.length % 8))]);
   switch (algo) {
     case enums.publicKey.rsaEncrypt:
     case enums.publicKey.rsaEncryptSign: {
@@ -64,6 +63,12 @@ export async function publicKeyEncrypt(algo, publicParams, data, fingerprint) {
       const { publicKey: V, wrappedKey: C } = await publicKey.elliptic.ecdh.encrypt(
         oid, kdfParams, data, Q, fingerprint);
       return { V, C: new ECDHSymkey(C) };
+    }
+    case enums.publicKey.x25519: {
+      const { A } = publicParams;
+      const { ephemeralPublicKey, wrappedKey } = await publicKey.elliptic.ecdhMontgomery.encrypt(
+        algo, data, A);
+      return { ephemeralPublicKey, C: new ECDHSymkey(wrappedKey) };
     }
     default:
       return [];
@@ -85,48 +90,36 @@ export async function publicKeyEncrypt(algo, publicParams, data, fingerprint) {
  * @async
  */
 export async function publicKeyDecrypt(algo, publicKeyParams, privateKeyParams, sessionKeyParams, fingerprint, randomPayload) {
-  let decrypted;
   switch (algo) {
     case enums.publicKey.rsaEncryptSign:
     case enums.publicKey.rsaEncrypt: {
       const { c } = sessionKeyParams;
       const { n, e } = publicKeyParams;
       const { d, p, q, u } = privateKeyParams;
-      decrypted = await publicKey.rsa.decrypt(c, n, e, d, p, q, u, randomPayload);
-      break;
+      return publicKey.rsa.decrypt(c, n, e, d, p, q, u, randomPayload);
     }
     case enums.publicKey.elgamal: {
       const { c1, c2 } = sessionKeyParams;
       const p = publicKeyParams.p;
       const x = privateKeyParams.x;
-      decrypted = await publicKey.elgamal.decrypt(c1, c2, p, x, randomPayload);
-      break;
+      return publicKey.elgamal.decrypt(c1, c2, p, x, randomPayload);
     }
     case enums.publicKey.ecdh: {
       const { oid, Q, kdfParams } = publicKeyParams;
       const { d } = privateKeyParams;
       const { V, C } = sessionKeyParams;
-      decrypted = await publicKey.elliptic.ecdh.decrypt(
+      return publicKey.elliptic.ecdh.decrypt(
         oid, kdfParams, V, C.data, Q, d, fingerprint);
-      break;
+    }
+    case enums.publicKey.x25519: {
+      const { k } = privateKeyParams;
+      const { ephemeralPublicKey, C } = sessionKeyParams;
+      return publicKey.elliptic.ecdhMontgomery.decrypt(
+        algo, ephemeralPublicKey, C.data, k);
     }
     default:
       throw new Error('Unknown public key encryption algorithm.');
   }
-  const result = decrypted.subarray(0, decrypted.length - 2);
-  const checksum = decrypted.subarray(decrypted.length - 2);
-  const computedChecksum = util.writeChecksum(result.subarray(result.length % 8));
-  const isValidChecksum = computedChecksum[0] === checksum[0] & computedChecksum[1] === checksum[1];
-  if (randomPayload) {
-    // We must not leak info about the validity of the decrypted checksum.
-    // The decrypted session key must be of the same size as the random session key, otherwise we discard it and use the random data.
-    const isValidPayload = isValidChecksum & decrypted.length === randomPayload.length;
-    return util.selectUint8Array(isValidPayload, result, randomPayload);
-  }
-  if (isValidChecksum) {
-    return result;
-  }
-  throw new Error('Decryption error');
 }
 
 /**
@@ -179,7 +172,8 @@ export function parsePublicKeyParams(algo, bytes) {
       const kdfParams = new KDFParams(); read += kdfParams.read(bytes.subarray(read));
       return { read: read, publicParams: { oid, Q, kdfParams } };
     }
-    case enums.publicKey.ed25519: {
+    case enums.publicKey.ed25519:
+    case enums.publicKey.x25519: {
       const A = bytes.subarray(read, read + 32); read += A.length;
       return { read, publicParams: { A } };
     }
@@ -230,6 +224,10 @@ export function parsePrivateKeyParams(algo, bytes, publicParams) {
       const seed = bytes.subarray(read, read + 32); read += seed.length;
       return { read, privateParams: { seed } };
     }
+    case enums.publicKey.x25519: {
+      const k = bytes.subarray(read, read + 32); read += k.length;
+      return { read, privateParams: { k } };
+    }
     default:
       throw new UnsupportedError('Unknown public key encryption algorithm.');
   }
@@ -267,6 +265,11 @@ export function parseEncSessionKeyParams(algo, bytes) {
       const C = new ECDHSymkey(); C.read(bytes.subarray(read));
       return { V, C };
     }
+    case enums.publicKey.x25519: {
+      const ephemeralPublicKey = bytes.subarray(read, read + 32); read += ephemeralPublicKey.length;
+      const C = new ECDHSymkey(); C.read(bytes.subarray(read));
+      return { ephemeralPublicKey, C };
+    }
     default:
       throw new UnsupportedError('Unknown public key encryption algorithm.');
   }
@@ -280,7 +283,7 @@ export function parseEncSessionKeyParams(algo, bytes) {
  */
 export function serializeParams(algo, params) {
   // Some algorithms do not rely on MPIs to store the binary params
-  const algosWithNativeRepresentation = new Set([enums.publicKey.ed25519]);
+  const algosWithNativeRepresentation = new Set([enums.publicKey.ed25519, enums.publicKey.x25519]);
   const orderedParams = Object.keys(params).map(name => {
     const param = params[name];
     if (!util.isUint8Array(param)) return param.write();
@@ -330,6 +333,11 @@ export function generateParams(algo, bits, oid) {
     case enums.publicKey.ed25519:
       return publicKey.elliptic.eddsa.generate(algo).then(({ A, seed }) => ({
         privateParams: { seed },
+        publicParams: { A }
+      }));
+    case enums.publicKey.x25519:
+      return publicKey.elliptic.ecdhMontgomery.generate(algo).then(({ A, k }) => ({
+        privateParams: { k },
         publicParams: { A }
       }));
     case enums.publicKey.dsa:
@@ -387,6 +395,11 @@ export async function validateParams(algo, publicParams, privateParams) {
       const { A } = publicParams;
       const { seed } = privateParams;
       return publicKey.elliptic.eddsa.validateParams(algo, A, seed);
+    }
+    case enums.publicKey.x25519: {
+      const { A } = publicParams;
+      const { k } = privateParams;
+      return publicKey.elliptic.ecdhMontgomery.validateParams(algo, A, k);
     }
     default:
       throw new Error('Unknown public key algorithm.');

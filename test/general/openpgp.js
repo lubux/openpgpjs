@@ -2011,6 +2011,36 @@ aOU=
       const { data: streamedData } = await openpgp.decrypt({ message: objectMessage, passwords, verificationKeys: privateKey, expectSigned: true, config });
       expect(await stream.readToEnd(streamedData)).to.equal(text);
     });
+
+    it('supports encrypting/decrypting in new x25519 format', async function () {
+      // v4 key
+      const privateKey = await openpgp.readKey({ armoredKey: `-----BEGIN PGP PRIVATE KEY BLOCK-----
+
+xUkEZB3qzRto01j2k2pwN5ux9w70stPinAdXULLr20CRW7U7h2GSeACch0M+
+qzQg8yjFQ8VBvu3uwgKH9senoHmj72lLSCLTmhFKzQR0ZXN0wogEEBsIAD4F
+gmQd6s0ECwkHCAmQIf45+TuC+xMDFQgKBBYAAgECGQECmwMCHgEWIQSWEzMi
+jJUHvyIbVKIh/jn5O4L7EwAAUhaHNlgudvxARdPPETUzVgjuWi+YIz8w1xIb
+lHQMvIrbe2sGCQIethpWofd0x7DHuv/ciHg+EoxJ/Td6h4pWtIoKx0kEZB3q
+zRm4CyA7quliq7yx08AoOqHTuuCgvpkSdEhpp3pEyejQOgBo0p6ywIiLPllY
+0t+jpNspHpAGfXID6oqjpYuJw3AfVRBlwnQEGBsIACoFgmQd6s0JkCH+Ofk7
+gvsTApsMFiEElhMzIoyVB78iG1SiIf45+TuC+xMAAGgQuN9G73446ykvJ/mL
+sCZ7zGFId2gBd1EnG0FTC4npfOKpck0X8dngByrCxU8LDSfvjsEp/xDAiKsQ
+aU71tdtNBQ==
+=e7jT
+-----END PGP PRIVATE KEY BLOCK-----` });
+      const plaintext = 'plaintext';
+
+      const signed = await openpgp.encrypt({
+        message: await openpgp.createMessage({ text: plaintext }),
+        encryptionKeys: privateKey
+      });
+
+      const { data } = await openpgp.decrypt({
+        message: await openpgp.readMessage({ armoredMessage: signed }),
+        decryptionKeys: privateKey
+      });
+      expect(data).to.equal(plaintext);
+    });
   });
 
   describe('encryptSessionKey - unit tests', function() {
