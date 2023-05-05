@@ -383,8 +383,11 @@ const util = {
   getBigInteger,
 
   getEd448: function() {
-    // TODO: once we rely on Node's native esm, point to @openpgp lib only
-    return this.getNodeCrypto() ? require('@noble/curves/ed448') : import('@openpgp/noble-curves/esm/ed448');
+    // TODO: once we rely on Node's native esm, point to @openpgp fork only
+
+    // https://github.com/import-js/eslint-plugin-import/issues/1810
+    // eslint-disable-next-line import/no-unresolved
+    return this.getNodeCrypto() ? require('@noble/curves/ed448') : import('@openpgp/noble-curves/ed448');
   },
 
   /**

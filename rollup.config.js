@@ -5,7 +5,7 @@ import { builtinModules } from 'module';
 import resolve from '@rollup/plugin-node-resolve';
 import commonjs from '@rollup/plugin-commonjs';
 import replace from '@rollup/plugin-replace';
-import { terser } from 'rollup-plugin-terser';
+import terser from '@rollup/plugin-terser';
 import { wasm } from '@rollup/plugin-wasm';
 
 
@@ -72,7 +72,7 @@ export default Object.assign([
   {
     input: 'src/index.js',
     inlineDynamicImports: true,
-    external: builtinModules.concat(nodeDependencies),
+    external: builtinModules.concat(nodeDependencies).concat(['@openpgp/noble-curves/ed448']),
     output: [
       { file: 'dist/node/openpgp.js', format: 'cjs', name: pkg.name, banner, intro },
       { file: 'dist/node/openpgp.min.js', format: 'cjs', name: pkg.name, banner, intro, plugins: [terser(terserOptions)], sourcemap: true },
@@ -122,10 +122,11 @@ export default Object.assign([
         browser: true
       }),
       commonjs({
-        ignore: builtinModules.concat(nodeDependencies)
+        ignore: builtinModules.concat(nodeDependencies),
+        requireReturnsDefault: 'preferred'
       }),
       replace({
-        "import openpgpjs from '../../..';": `import * as openpgpjs from '/dist/${process.env.npm_config_lightweight ? 'lightweight/' : ''}openpgp.mjs'; window.openpgp = openpgpjs;`,
+        "import require$$2 from '..';": `import * as openpgpjs from '/dist/${process.env.npm_config_lightweight ? 'lightweight/' : ''}openpgp.mjs'; window.openpgp = openpgpjs;`,
         'require(': 'void(',
         delimiters: ['', '']
       }),
