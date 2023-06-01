@@ -432,7 +432,7 @@ export class Message {
         if (aeadAlgorithm) {
           pkESKeyPacket.version = 6;
           pkESKeyPacket.publicKeyVersion = wildcard ? 0 : encryptionKey.keyPacket.version;
-          pkESKeyPacket.publicKeyFingerprint = wildcard ? new Uint8Array() : encryptionKey.keyPacket.getFingerprintBytes();
+          pkESKeyPacket.publicKeyFingerprint = wildcard ? null : encryptionKey.keyPacket.getFingerprintBytes();
         } else {
           pkESKeyPacket.publicKeyID = wildcard ? KeyID.wildcard() : encryptionKey.getKeyID();
         }
