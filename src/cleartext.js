@@ -148,7 +148,7 @@ export async function readCleartextMessage({ cleartextMessage, config, ...rest }
     throw new Error('No cleartext signed message.');
   }
   const packetlist = await PacketList.fromBinary(input.data, allowedPackets, config);
-  verifyHeaders(input.headers, packetlist);
+  verifyHeaders(input.headers);
   const signature = new Signature(packetlist);
   return new CleartextMessage(input.text, signature);
 }
@@ -159,44 +159,14 @@ export async function readCleartextMessage({ cleartextMessage, config, ...rest }
  * @param {PacketList} packetlist - The packetlist with signature packets
  * @private
  */
-function verifyHeaders(headers, packetlist) {
-  const checkHashAlgos = function(hashAlgos) {
-    const check = packet => algo => packet.hashAlgorithm === algo;
-
-    for (let i = 0; i < packetlist.length; i++) {
-      if (packetlist[i].constructor.tag === enums.packet.signature && !hashAlgos.some(check(packetlist[i]))) {
-        return false;
-      }
-    }
-    return true;
-  };
-
+function verifyHeaders(headers) {
   let oneHeader = null;
-  let hashAlgos = [];
   headers.forEach(function(header) {
     oneHeader = header.match(/Hash: (.+)/); // get header value
-    if (oneHeader) {
-      oneHeader = oneHeader[1].replace(/\s/g, ''); // remove whitespace
-      oneHeader = oneHeader.split(',');
-      oneHeader = oneHeader.map(function(hash) {
-        hash = hash.toLowerCase();
-        try {
-          return enums.write(enums.hash, hash);
-        } catch (e) {
-          throw new Error('Unknown hash algorithm in armor header: ' + hash);
-        }
-      });
-      hashAlgos = hashAlgos.concat(oneHeader);
-    } else {
+    if (!oneHeader) {
       throw new Error('Only "Hash" header allowed in cleartext signed message');
     }
   });
-
-  if (!hashAlgos.length && !checkHashAlgos([enums.hash.md5])) {
-    throw new Error('If no "Hash" header in cleartext signed message, then only MD5 signatures allowed');
-  } else if (hashAlgos.length && !checkHashAlgos(hashAlgos)) {
-    throw new Error('Hash algorithm mismatch in armor header and signature');
-  }
 }
 
 /**
