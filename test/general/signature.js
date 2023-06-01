@@ -223,6 +223,73 @@ module.exports = () => describe('Signature', function() {
       '=ok+o',
       '-----END PGP PUBLIC KEY BLOCK-----'].join('\n');
 
+  const priv_key_arm_v6 =
+      '-----BEGIN PGP PRIVATE KEY BLOCK-----\n' +
+      '\n' +
+      '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\n' +
+      'SCfmYTfS6Q9zsjOIRaR/OBxpCaF6\n' +
+      '=Xrur\n' +
+      '-----END PGP PRIVATE KEY BLOCK-----';
+
   const pub_latin1_msg = `-----BEGIN PGP PUBLIC KEY BLOCK-----
 
 mQINBFS6eEEBEAC56tAm82tgg5BJE0dA4c5UNUDQ7SKLIsleh7TrwsKocEp1b34E
@@ -707,6 +774,25 @@ hUhMKMuiM3pRwdIyDOItkUWQmjEEw7/XmhgInkXsCw==
     const signature = await openpgp.readSignature({ armoredSignature });
     expect(signature.getSigningKeyIDs).to.exist;
     expect(signature.getSigningKeyIDs().map(x => x.toHex())).to.include(publicKey.getKeyID().toHex());
+  });
+
+  it('Check that a one-pass signature is correct when produced with a v6 key', async function () {
+    const privateKey = await openpgp.readKey({ armoredKey: priv_key_arm_v6 });
+    const message = await openpgp.createMessage({ text: 'test' });
+    const armoredSignedMessage = await openpgp.sign({
+      message,
+      signingKeys: privateKey,
+      signingKeyIDs: privateKey.getKeyID(),
+      detached: false,
+      config: { minRSABits: 1024 }
+    });
+    const messageRead = await openpgp.readMessage({ armoredMessage: armoredSignedMessage })
+    messageRead.packets.push(...await stream.readToEnd(messageRead.packets.stream, _ => _));
+    const ops = messageRead.packets[0]
+    const signature = messageRead.packets[2]
+    expect(ops.version).to.equal(6);
+    expect(util.uint8ArrayToHex(ops.issuerFingerprint)).to.equal(privateKey.getFingerprint());
+    expect(ops.salt).to.deep.equal(signature.salt);
   });
 
   it('Throws when reading a signature missing the creation time', async function () {
