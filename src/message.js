@@ -434,6 +434,7 @@ export class Message {
           pkESKeyPacket.publicKeyVersion = wildcard ? 0 : encryptionKey.keyPacket.version;
           pkESKeyPacket.publicKeyFingerprint = wildcard ? null : encryptionKey.keyPacket.getFingerprintBytes();
         } else {
+          pkESKeyPacket.version = 3;
           pkESKeyPacket.publicKeyID = wildcard ? KeyID.wildcard() : encryptionKey.getKeyID();
         }
         pkESKeyPacket.publicKeyAlgorithm = encryptionKey.keyPacket.algorithm;

@@ -43,7 +43,7 @@ class PublicKeyEncryptedSessionKeyPacket {
   }
 
   constructor() {
-    this.version = 3;
+    this.version = null;
 
     // For version 3:
     this.publicKeyID = new KeyID();

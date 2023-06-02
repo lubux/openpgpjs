@@ -473,6 +473,7 @@ module.exports = () => describe('Packet', function() {
 
     return crypto.generateParams(rsa, keySize, 65537).then(function({ publicParams, privateParams }) {
       const enc = new openpgp.PublicKeyEncryptedSessionKeyPacket();
+      enc.version = 3
       const msg = new openpgp.PacketList();
       const msg2 = new openpgp.PacketList();
 
@@ -522,6 +523,7 @@ module.exports = () => describe('Packet', function() {
     key = key[0];
 
     const enc = new openpgp.PublicKeyEncryptedSessionKeyPacket();
+    enc.version = 3
     const secret = new Uint8Array([1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6,7,8,9,0,1,2]);
 
     enc.sessionKey = secret;
