@@ -1132,6 +1132,86 @@ eSvSZutLuKKbidSYMLhWROPlwKc2GU2ws6PrLZAyCAel/lU=
     }
   });
 
+  it('Verify V6 signature of a signed and encrypted message from GopenPGP with openpgp.decrypt', async function() {
+    const armored_msg =
+        '-----BEGIN PGP MESSAGE-----\n' +
+        '\n' +
+        'wcBmBiEG+C4NM9PbGvO2RyLA9hVrFkKck2riJ5ydxrHEDCHIFtIBB/9gRZ8oeVyv\n' +
+        'kDMWG0fZFRkbnoSIkwbklwMOD1obnkwSAxRhcsKlZ+xXDMfFKbC//mtZ0Vj3I2Ys\n' +
+        'h25/IZ3qn5MxiisO1xl++qfCMnI7+y1ETwd6qGyusNXQPAReU5jUNNfy/NKChSIo\n' +
+        's/3VbB1w63mN2M2Mytm1GF2ujwT3MqXKSs4tvcLgtwSnKYPTDkj/xS7vwOHjdyTg\n' +
+        'Jc4c6B2+Fy98kD780LWF0x0sAVPSc+lbw0tsND6IwgSI2OLbdcTnNHafvr60VKB5\n' +
+        '33oFK95bECPCnKNwIcq2vOJ6/WmPvpGE6NlJfTFm0n2hJlKgV9KJNC5oHGSFCNMw\n' +
+        'xmzlGdbHq/Ap0sEcAgcDDAj9CmjD1Irn624SUkVRAFWs2kusRxJQUETtP72oehfL\n' +
+        'NHAAFccQfKY9JGsIkZf5bh3vG51CU4+C1LNPbqxC8qD/0/I6CnWuCqJu5S1Mbsqr\n' +
+        'jp6gm5hYh/SfqNfKgdU0NZ4EkgoVWXILidFSeSIdO08XeX/NcJ96YSxt4qITfawm\n' +
+        'Gf5hCukONkI9KP5io+Q5WWa0DhOlpMjTLxtzvBpGdM7TU853lpv3I19yuV4XZP05\n' +
+        'NCwdDbI16BqlnmwBBTTwgqh8zhcPfml8AiKsMAjN3pUu0tL5mKfwxtnYrwX4RQvt\n' +
+        'Dh/RlBcFHA0a8qGjuZZZCEXUhUM4J5q0kx1X5r3arYaV9vhvO0rprMHrGdKCxOkh\n' +
+        'pNVCwt1AUFgijccuHYyjl+pecQdhuHGbYwaMVMbJ9IoYYJ9fjLiSATG51dVZmKi9\n' +
+        'Pyjb6hXnWKMJJfTSbjZvYHHOedRbZGGBFs/JPWA1CBiNIkJyIOelI8cMiRvMlWVT\n' +
+        'TD2VXAwDnQ3u2sFXY7uRKdMsxkWIeMpy0j5Ib28KCjxCsvop2H2D1r4gcKFl+L49\n' +
+        'VqW+RfTZYTRV6dn5OEdcjX2nQNQAIjD+W24VnCzzGqF6H/3Hix9mK5wh4+2o3EjQ\n' +
+        'SiSZpkBEbHk=\n' +
+        '=U0DE\n' +
+        '-----END PGP MESSAGE-----';
+
+    const verify_key = 
+        '-----BEGIN PGP PUBLIC KEY BLOCK-----\n' +
+        '\n' +
+        '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\n' +
+        'BLw3HPnH7Pb4WVMXAmgdba4=\n' +
+        '=VW5c\n' +
+        '-----END PGP PUBLIC KEY BLOCK-----'
+
+    const plaintext = 'Hello there';
+    const message = await openpgp.readMessage({ armoredMessage: armored_msg });
+    const pubKey = await openpgp.readKey({ armoredKey: verify_key });
+    const privKey = await openpgp.readKey({ armoredKey: priv_key_arm_v6 });
+
+    return openpgp.decrypt({
+      decryptionKeys: privKey, verificationKeys: pubKey , message, config: { minRSABits: 2048 }
+    }).then(async ({ signatures, data }) => {
+      expect(data).to.exist;
+      expect(data).to.equal(plaintext);
+      expect(signatures).to.have.length(1);
+      expect(await signatures[0].verified).to.be.true;
+      expect((await signatures[0].signature).packets.length).to.equal(1);
+    });
+  });
+
   it('Verify signature of signed and encrypted message from GPG2 with openpgp.decrypt', async function() {
     const msg_armor =
       ['-----BEGIN PGP MESSAGE-----',
