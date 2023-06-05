@@ -129,6 +129,14 @@ module.exports = () => describe('Packet', function() {
     }
   });
 
+  it('PKESK v3 with cleartext chiper identifier: reject non-AES ciphers (x448)', async function() {
+    const encryptedSessionKey = util.hexToUint8Array('c15c034c69621ea2a1637d1a032586bc63238b11649ecf54c6b85009daece289c48cc431c9c1756021bd18069e8e5693d4b7f9e84d644cbf1f55080b657f2aa7f96f8960c41854e2d8a0db8b5740bf41fccabe77b66eba8839dae5c7056d');
+
+    await expect(
+      openpgp.PacketList.fromBinary(encryptedSessionKey, allAllowedPackets, { ...openpgp.config, ignoreUnsupportedPackets: false })
+    ).to.be.rejectedWith(/Unexpected non-AES session key/);
+  });
+
   it('Sym. encrypted integrity protected packet', async function() {
     const key = new Uint8Array([1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6,7,8,9,0,1,2]);
     const algo = openpgp.enums.symmetric.aes256;

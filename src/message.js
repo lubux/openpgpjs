@@ -355,6 +355,16 @@ export class Message {
     const symmetricAlgoName = enums.read(enums.symmetric, symmetricAlgo);
     const aeadAlgoName = aeadAlgo ? enums.read(enums.aead, aeadAlgo) : undefined;
 
+    await Promise.all(encryptionKeys.map(key => key.getEncryptionKey()
+      .catch(() => null) // ignore key strength requirements
+      .then(maybeKey => {
+        if (maybeKey && (maybeKey.keyPacket.algorithm === enums.publicKey.x25519 || maybeKey.keyPacket.algorithm === enums.publicKey.x448) &&
+          !aeadAlgoName && !util.isAES(symmetricAlgo)) { // if AEAD is defined, then PKESK v6 are used, and the algo info is encrypted
+          throw new Error('Could not generate a session key compatible with the given `encryptionKeys`: X22519 and X448 keys can only be used to encrypt AES session keys; change `config.preferredSymmetricAlgorithm` accordingly.');
+        }
+      })
+    ));
+
     const sessionKeyData = crypto.generateSessionKey(symmetricAlgo);
     return { data: sessionKeyData, algorithm: symmetricAlgoName, aeadAlgorithm: aeadAlgoName };
   }

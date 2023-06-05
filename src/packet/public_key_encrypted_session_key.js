@@ -103,6 +103,9 @@ class PublicKeyEncryptedSessionKeyPacket {
     if (this.version === 3 && (
       this.publicKeyAlgorithm === enums.publicKey.x25519 || this.publicKeyAlgorithm === enums.publicKey.x448)) {
       this.sessionKeyAlgorithm = bytes[offset++];
+      if (!util.isAES(this.sessionKeyAlgorithm)) {
+        throw new Error('Unexpected non-AES session key');
+      }
     }
 
     this.encrypted = crypto.parseEncSessionKeyParams(this.publicKeyAlgorithm, bytes.subarray(offset));
@@ -152,6 +155,11 @@ class PublicKeyEncryptedSessionKeyPacket {
    */
   async encrypt(key) {
     const algo = enums.write(enums.publicKey, this.publicKeyAlgorithm);
+    if (this.version === 3 && !util.isAES(this.sessionKeyAlgorithm) && (algo === enums.publicKey.x25519 || algo === enums.publicKey.x448)) {
+      // see https://gitlab.com/openpgp-wg/rfc4880bis/-/merge_requests/276
+      throw new Error('X25519 and X448 keys can only encrypt AES session keys');
+    }
+
     const encoded = encodeSessionKey(this.version, algo, this.sessionKeyAlgorithm, this.sessionKey);
     this.encrypted = await crypto.publicKeyEncrypt(
       algo, key.publicParams, encoded, key.getFingerprintBytes());
