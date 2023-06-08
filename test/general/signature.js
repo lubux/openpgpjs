@@ -1545,6 +1545,25 @@ ${armoredSignature}
     expect(await signatures[0].verified).to.be.true;
   });
 
+  it('Sign cleartext message with v6 signatures expect no headers', async function() {
+    const privKeyV6 = await openpgp.readKey({ armoredKey: priv_key_arm_v6 });
+    const privKeyV4 = await openpgp.decryptKey({
+      privateKey: await openpgp.readKey({ armoredKey: priv_key_arm2 }),
+      passphrase: 'hello world'
+    });
+    const messageV6 = await openpgp.createCleartextMessage({
+      text: 'check header message'
+    });
+    const messageV4 = await openpgp.createCleartextMessage({
+      text: 'check header message'
+    });
+    const config = { minRSABits: 1024 };
+    const cleartextMessageV6 = await openpgp.sign({ message: messageV6, signingKeys: privKeyV6, config, format: 'armored' });
+    const cleartextMessageV4 = await openpgp.sign({ message: messageV4, signingKeys: [privKeyV4, privKeyV6], config, format: 'armored' });
+    expect(cleartextMessageV6).to.not.contain('Hash:');
+    expect(cleartextMessageV4).to.contain('Hash:');
+  });
+
   function tests() {
     it('Verify signed message with trailing spaces from GPG', async function() {
       const armoredMessage =
