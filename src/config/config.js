@@ -69,11 +69,10 @@ export default {
   /**
    * Use v6 keys.
    * Note: not all OpenPGP implementations are compatible with this option.
-   * **FUTURE OPENPGP.JS VERSIONS MAY BREAK COMPATIBILITY WHEN USING THIS OPTION**
    * @memberof module:config
    * @property {Boolean} v6Keys
    */
-  v6Keys: false,
+  v6Keys: true,
   /**
    * S2K (String to Key) type, used for key derivation in the context of secret key encryption
    * and password-encrypted data. Weaker s2k options are not allowed.
