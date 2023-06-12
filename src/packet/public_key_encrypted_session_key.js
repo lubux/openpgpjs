@@ -74,10 +74,13 @@ class PublicKeyEncryptedSessionKeyPacket {
     }
     i += this.publicKeyID.read(bytes.subarray(i));
     this.publicKeyAlgorithm = bytes[i++];
+    this.encrypted = crypto.parseEncSessionKeyParams(this.publicKeyAlgorithm, bytes.subarray(i), this.version);
     if (this.version === 3 && this.publicKeyAlgorithm === enums.publicKey.x25519) {
-      this.sessionKeyAlgorithm = bytes[i++];
+      if (this.encrypted.metadata.length < 2) {
+        throw new Error(`No session key algorithm for x25519 PKESK v3 packet.`);
+      }
+      this.sessionKeyAlgorithm = enums.write(enums.symmetric, this.encrypted.metadata[1]);
     }
-    this.encrypted = crypto.parseEncSessionKeyParams(this.publicKeyAlgorithm, bytes.subarray(i));
   }
 
   /**
@@ -90,9 +93,6 @@ class PublicKeyEncryptedSessionKeyPacket {
       new Uint8Array([this.version]),
       this.publicKeyID.write(),
       new Uint8Array([this.publicKeyAlgorithm]),
-      (this.version === 3 && this.publicKeyAlgorithm === enums.publicKey.x25519) ?
-        new Uint8Array([this.sessionKeyAlgorithm]) :
-        new Uint8Array(),
       crypto.serializeParams(this.publicKeyAlgorithm, this.encrypted)
     ];
 
@@ -108,8 +108,9 @@ class PublicKeyEncryptedSessionKeyPacket {
   async encrypt(key) {
     const algo = enums.write(enums.publicKey, this.publicKeyAlgorithm);
     const encoded = encodeSessionKey(this.version, algo, this.sessionKeyAlgorithm, this.sessionKey);
+    const skAlgorithm = this.version === 3 && algo === enums.publicKey.x25519 ? this.sessionKeyAlgorithm : undefined;
     this.encrypted = await crypto.publicKeyEncrypt(
-      algo, key.publicParams, encoded, key.getFingerprintBytes());
+      algo, key.publicParams, encoded, key.getFingerprintBytes(), skAlgorithm);
   }
 
   /**

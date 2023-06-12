@@ -43,10 +43,11 @@ import { UnsupportedError } from '../packet/packet';
  * @param {Object} publicParams - Algorithm-specific public key parameters
  * @param {Uint8Array} data - Data to be encrypted
  * @param {Uint8Array} fingerprint - Recipient fingerprint
+ * @param {module:enums.symmetric} sessionKeyAlgorithm - Algorithm the session key is used for (v3 PKESK x25519, x448)
  * @returns {Promise<Object>} Encrypted session key parameters.
  * @async
  */
-export async function publicKeyEncrypt(algo, publicParams, data, fingerprint) {
+export async function publicKeyEncrypt(algo, publicParams, data, fingerprint, sessionKeyAlgorithm) {
   switch (algo) {
     case enums.publicKey.rsaEncrypt:
     case enums.publicKey.rsaEncryptSign: {
@@ -68,7 +69,12 @@ export async function publicKeyEncrypt(algo, publicParams, data, fingerprint) {
       const { A } = publicParams;
       const { ephemeralPublicKey, wrappedKey } = await publicKey.elliptic.ecdhMontgomery.encrypt(
         algo, data, A);
-      return { ephemeralPublicKey, C: new ECDHSymkey(wrappedKey) };
+      const followLength = wrappedKey.length;
+      const metadata = sessionKeyAlgorithm ? 
+        new Uint8Array([followLength + 1, sessionKeyAlgorithm]): 
+        new Uint8Array([followLength]);
+      return { ephemeralPublicKey, metadata, C: wrappedKey };
+     
     }
     default:
       return [];
@@ -116,7 +122,7 @@ export async function publicKeyDecrypt(algo, publicKeyParams, privateKeyParams, 
       const { k } = privateKeyParams;
       const { ephemeralPublicKey, C } = sessionKeyParams;
       return publicKey.elliptic.ecdhMontgomery.decrypt(
-        algo, ephemeralPublicKey, C.data, A, k);
+        algo, ephemeralPublicKey, C, A, k);
     }
     default:
       throw new Error('Unknown public key encryption algorithm.');
@@ -237,9 +243,10 @@ export function parsePrivateKeyParams(algo, bytes, publicParams) {
 /** Returns the types comprising the encrypted session key of an algorithm
  * @param {module:enums.publicKey} algo - The key algorithm
  * @param {Uint8Array} bytes - The key material to parse
+ * @param {Number} version - The PKESK version
  * @returns {Object} The session key parameters referenced by name.
  */
-export function parseEncSessionKeyParams(algo, bytes) {
+export function parseEncSessionKeyParams(algo, bytes, version) {
   let read = 0;
   switch (algo) {
     //   Algorithm-Specific Fields for RSA encrypted session keys:
@@ -266,10 +273,19 @@ export function parseEncSessionKeyParams(algo, bytes) {
       const C = new ECDHSymkey(); C.read(bytes.subarray(read));
       return { V, C };
     }
+    //   Algorithm-Specific Fields for X25519 encrypted session keys:
+    //       - 32 octets representing an ephemeral X25519 public key.
+    //       - A one-octet size of the following fields.
+    //       - The one-octet algorithm identifier, if it was passed (in the case of a v3 PKESK packet).
+    //       - The encrypted session key.
     case enums.publicKey.x25519: {
       const ephemeralPublicKey = bytes.subarray(read, read + 32); read += ephemeralPublicKey.length;
-      const C = new ECDHSymkey(); C.read(bytes.subarray(read));
-      return { ephemeralPublicKey, C };
+      let followLength = bytes[read++];
+      const metadata = version === 3 ?
+        new Uint8Array([followLength--, bytes[read++]]): 
+        new Uint8Array([followLength]);
+      const C = bytes.subarray(read, read + followLength); read += followLength;
+      return { ephemeralPublicKey, metadata, C };  
     }
     default:
       throw new UnsupportedError('Unknown public key encryption algorithm.');
