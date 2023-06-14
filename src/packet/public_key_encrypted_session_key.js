@@ -100,15 +100,17 @@ class PublicKeyEncryptedSessionKeyPacket {
       offset += this.publicKeyID.read(bytes.subarray(offset));
     }
     this.publicKeyAlgorithm = bytes[offset++];
+    this.encrypted = crypto.parseEncSessionKeyParams(this.publicKeyAlgorithm, bytes.subarray(offset), this.version);
     if (this.version === 3 && (
       this.publicKeyAlgorithm === enums.publicKey.x25519 || this.publicKeyAlgorithm === enums.publicKey.x448)) {
-      this.sessionKeyAlgorithm = bytes[offset++];
+      if (this.encrypted.metadata.length < 2) {
+        throw new Error(`No session key algorithm for PKESK v3 packet.`);
+      }
+      this.sessionKeyAlgorithm = enums.write(enums.symmetric, this.encrypted.metadata[1]);
       if (!util.isAES(this.sessionKeyAlgorithm)) {
         throw new Error('Unexpected non-AES session key');
       }
     }
-
-    this.encrypted = crypto.parseEncSessionKeyParams(this.publicKeyAlgorithm, bytes.subarray(offset));
   }
 
   /**
@@ -137,10 +139,6 @@ class PublicKeyEncryptedSessionKeyPacket {
 
     arr.push(
       new Uint8Array([this.publicKeyAlgorithm]),
-      (this.version === 3 && (
-        this.publicKeyAlgorithm === enums.publicKey.x25519 || this.publicKeyAlgorithm === enums.publicKey.x448)) ?
-        new Uint8Array([this.sessionKeyAlgorithm]) :
-        new Uint8Array(),
       crypto.serializeParams(this.publicKeyAlgorithm, this.encrypted)
     );
 
@@ -161,8 +159,9 @@ class PublicKeyEncryptedSessionKeyPacket {
     }
 
     const encoded = encodeSessionKey(this.version, algo, this.sessionKeyAlgorithm, this.sessionKey);
+    const skAlgorithm = this.version === 3 && (algo === enums.publicKey.x25519 || algo === enums.publicKey.x448) ? this.sessionKeyAlgorithm : undefined;
     this.encrypted = await crypto.publicKeyEncrypt(
-      algo, key.publicParams, encoded, key.getFingerprintBytes());
+      algo, key.publicParams, encoded, key.getFingerprintBytes(), skAlgorithm);
   }
 
   /**
