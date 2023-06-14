@@ -35,19 +35,20 @@ import util from '../util';
 import OID from '../type/oid';
 import { CurveWithOID } from './public_key/elliptic/oid_curves';
 import { UnsupportedError } from '../packet/packet';
-
 /**
  * Encrypts data using specified algorithm and public key parameters.
  * See {@link https://tools.ietf.org/html/rfc4880#section-9.1|RFC 4880 9.1} for public key algorithms.
  * @param {module:enums.publicKey} algo - Public key algorithm
  * @param {Object} publicParams - Algorithm-specific public key parameters
- * @param {Uint8Array} data - Data to be encrypted
+ * @param {Uint8Array} sessionKey - The session key to encrypt
  * @param {Uint8Array} fingerprint - Recipient fingerprint
- * @param {module:enums.symmetric} sessionKeyAlgorithm - Algorithm the session key is used for (v3 PKESK x25519, x448)
+ * @param {module:enums.symmetric} sessionKeyAlgorithm - Algorithm the session key is used for
+ * @param {Number} version - The PKESK version to encrypt to
  * @returns {Promise<Object>} Encrypted session key parameters.
  * @async
  */
-export async function publicKeyEncrypt(algo, publicParams, data, fingerprint, sessionKeyAlgorithm) {
+export async function publicKeyEncrypt(algo, publicParams, sessionKey, fingerprint, sessionKeyAlgorithm, version) {
+  const data = encodeSessionKey(version, algo, sessionKeyAlgorithm, sessionKey);
   switch (algo) {
     case enums.publicKey.rsaEncrypt:
     case enums.publicKey.rsaEncryptSign: {
@@ -70,7 +71,7 @@ export async function publicKeyEncrypt(algo, publicParams, data, fingerprint, se
       const { ephemeralPublicKey, wrappedKey } = await publicKey.elliptic.ecdhMontgomery.encrypt(
         algo, data, A);
       const followLength = wrappedKey.length;
-      const metadata = sessionKeyAlgorithm ? 
+      const metadata = version === 3 ? 
         new Uint8Array([followLength + 1, sessionKeyAlgorithm]): 
         new Uint8Array([followLength]);
       return { ephemeralPublicKey, metadata, C: wrappedKey };
@@ -89,44 +90,65 @@ export async function publicKeyEncrypt(algo, publicParams, data, fingerprint, se
  * @param {Object} privateKeyParams - Algorithm-specific private key parameters
  * @param {Object} sessionKeyParams - Encrypted session key parameters
  * @param {Uint8Array} fingerprint - Recipient fingerprint
+ * @param {Number} version - The version of the PKESK packet to decrypt
  * @param {Uint8Array} [randomPayload] - Data to return on decryption error, instead of throwing
  *                                    (needed for constant-time processing in RSA and ElGamal)
- * @returns {Promise<Uint8Array>} Decrypted data.
+ * @returns {Promise<{ sessionKey: Uint8Array, sessionKeyAlgorithm: any }>} Decrypted session key and params.
  * @throws {Error} on sensitive decryption error, unless `randomPayload` is given
  * @async
  */
-export async function publicKeyDecrypt(algo, publicKeyParams, privateKeyParams, sessionKeyParams, fingerprint, randomPayload) {
+export async function publicKeyDecrypt(algo, publicKeyParams, privateKeyParams, sessionKeyParams, fingerprint, version, randomSessionKey) {
+  const randomPayload = randomSessionKey ?
+      encodeSessionKey(version, algo, randomSessionKey.sessionKeyAlgorithm, randomSessionKey.sessionKey) :
+      null;
+  let decryptedData;
+  let sessionKeyAlgorithm;
   switch (algo) {
     case enums.publicKey.rsaEncryptSign:
     case enums.publicKey.rsaEncrypt: {
       const { c } = sessionKeyParams;
       const { n, e } = publicKeyParams;
       const { d, p, q, u } = privateKeyParams;
-      return publicKey.rsa.decrypt(c, n, e, d, p, q, u, randomPayload);
+      decryptedData = await publicKey.rsa.decrypt(c, n, e, d, p, q, u, randomPayload);
+      break;
     }
     case enums.publicKey.elgamal: {
       const { c1, c2 } = sessionKeyParams;
       const p = publicKeyParams.p;
       const x = privateKeyParams.x;
-      return publicKey.elgamal.decrypt(c1, c2, p, x, randomPayload);
+      decryptedData = await publicKey.elgamal.decrypt(c1, c2, p, x, randomPayload);
+      break;
     }
     case enums.publicKey.ecdh: {
       const { oid, Q, kdfParams } = publicKeyParams;
       const { d } = privateKeyParams;
       const { V, C } = sessionKeyParams;
-      return publicKey.elliptic.ecdh.decrypt(
+      decryptedData = await publicKey.elliptic.ecdh.decrypt(
         oid, kdfParams, V, C.data, Q, d, fingerprint);
+      break;
     }
     case enums.publicKey.x25519: {
       const { A } = publicKeyParams;
       const { k } = privateKeyParams;
-      const { ephemeralPublicKey, C } = sessionKeyParams;
-      return publicKey.elliptic.ecdhMontgomery.decrypt(
+      const { ephemeralPublicKey, metadata, C } = sessionKeyParams;
+      decryptedData = await publicKey.elliptic.ecdhMontgomery.decrypt(
         algo, ephemeralPublicKey, C, A, k);
+      if (version === 3) {
+        if (metadata.length < 2) {
+          throw new Error(`No session key algorithm for PKESK v3 packet.`);
+        }
+        sessionKeyAlgorithm = metadata[1];
+      }
+      break;
     }
     default:
       throw new Error('Unknown public key encryption algorithm.');
   }
+  let sessionKeyDecoded = decodeSessionKey(version, algo, decryptedData, randomSessionKey);
+  if (sessionKeyAlgorithm) {
+    sessionKeyDecoded.sessionKeyAlgorithm = sessionKeyAlgorithm;
+  }
+  return sessionKeyDecoded;
 }
 
 /**
@@ -471,5 +493,70 @@ function checkSupportedCurve(oid) {
     oid.getName();
   } catch (e) {
     throw new UnsupportedError('Unknown curve OID');
+  }
+}
+
+function encodeSessionKey(version, algo, cipherAlgo, sessionKeyData) {
+  switch (algo) {
+    case enums.publicKey.rsaEncrypt:
+    case enums.publicKey.rsaEncryptSign:
+    case enums.publicKey.elgamal:
+    case enums.publicKey.ecdh: {
+      // add checksum
+      return util.concatUint8Array([
+        new Uint8Array([cipherAlgo]),
+        sessionKeyData,
+        util.writeChecksum(sessionKeyData.subarray(sessionKeyData.length % 8))
+      ]);
+
+    }
+    case enums.publicKey.x25519: {
+      return sessionKeyData;
+    }
+    default:
+      throw new Error('Unsupported public key algorithm');
+  }
+}
+
+function decodeSessionKey(version, algo, decryptedData, randomSessionKey) {
+  switch (algo) {
+    case enums.publicKey.rsaEncrypt:
+    case enums.publicKey.rsaEncryptSign:
+    case enums.publicKey.elgamal:
+    case enums.publicKey.ecdh: {
+      // verify checksum in constant time
+      const result = decryptedData.subarray(0, decryptedData.length - 2);
+      const checksum = decryptedData.subarray(decryptedData.length - 2);
+      const computedChecksum = util.writeChecksum(result.subarray(result.length % 8));
+      const isValidChecksum = computedChecksum[0] === checksum[0] & computedChecksum[1] === checksum[1];
+      const decryptedSessionKey = { sessionKeyAlgorithm: result[0], sessionKey: result.subarray(1) };
+      if (randomSessionKey) {
+        // We must not leak info about the validity of the decrypted checksum or cipher algo.
+        // The decrypted session key must be of the same algo and size as the random session key, otherwise we discard it and use the random data.
+        const isValidPayload = isValidChecksum & decryptedSessionKey.sessionKeyAlgorithm === randomSessionKey.sessionKeyAlgorithm & decryptedSessionKey.sessionKey.length === randomSessionKey.sessionKey.length;
+        return {
+          sessionKey: util.selectUint8Array(isValidPayload, decryptedSessionKey.sessionKey, randomSessionKey.sessionKey),
+          sessionKeyAlgorithm: util.selectUint8(
+            isValidPayload,
+            decryptedSessionKey.sessionKeyAlgorithm || randomSessionKey.sessionKeyAlgorithm,
+            randomSessionKey.sessionKeyAlgorithm
+          )
+        };
+      } else {
+        const isValidPayload = isValidChecksum && (decryptedSessionKey.sessionKeyAlgorithm === null || enums.read(enums.symmetric, decryptedSessionKey.sessionKeyAlgorithm));
+        if (isValidPayload) {
+          return decryptedSessionKey;
+        } else {
+          throw new Error('Decryption error');
+        }
+      }
+    }
+    case enums.publicKey.x25519: {
+      return {
+        sessionKey: decryptedData
+      };
+    }
+    default:
+      throw new Error('Unsupported public key algorithm');
   }
 }

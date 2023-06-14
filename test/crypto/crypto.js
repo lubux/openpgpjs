@@ -273,7 +273,7 @@ module.exports = () => describe('API functional testing', function() {
         return crypto.publicKeyDecrypt(
           algoRSA, RSAPublicParams, RSAPrivateParams, RSAEncryptedData
         ).then(data => {
-          expect(data).to.deep.equal(symmKey);
+          expect(data.sessionKey).to.deep.equal(symmKey);
         });
       });
     });
@@ -284,7 +284,7 @@ module.exports = () => describe('API functional testing', function() {
         return crypto.publicKeyDecrypt(
           algoElGamal, elGamalPublicParams, elGamalPrivateParams, ElgamalEncryptedData
         ).then(data => {
-          expect(data).to.deep.equal(symmKey);
+          expect(data.sessionKey).to.deep.equal(symmKey);
         });
       });
     });
